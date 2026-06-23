@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="./image-slot.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .lucide, [data-lucide] { width: 1em; height: 1em; stroke-width: 2; }
+  .frame { width: 320px; height: 690px; background: linear-gradient(168deg,#191a1e 0%,#0c0d0f 60%,#0a0b0c 100%); border-radius: 44px; position: relative; overflow: hidden; box-shadow: 0 40px 70px -24px rgba(0,0,0,.75), inset 0 0 0 1px rgba(255,255,255,.055), inset 0 1px 0 0 rgba(255,255,255,.09); }
+  .listrow:hover { background: rgba(255,255,255,.05) !important; }
+  @keyframes pulsering { 0% { transform: scale(.85); opacity: .9; } 100% { transform: scale(1.12); opacity: .15; } }
+  .pulse { animation: pulsering 2.6s ease-out infinite; }
+  ::-webkit-scrollbar { display: none; }
+</style>
+</helmet>
+<div style="min-width:100%;min-height:100vh;box-sizing:border-box;padding:48px;background:radial-gradient(120% 80% at 50% -10%, #303135 0%, #1c1d20 55%, #161719 100%);font-family:'Manrope',sans-serif;">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 40px;max-width:1400px;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div style="width:42px;height:42px;border-radius:13px;background:linear-gradient(150deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;box-shadow:0 8px 22px -6px rgba(255,90,0,.6);"><i data-lucide="zap"></i></div>
+      <div>
+        <div style="font-family:'Sora';font-weight:700;font-size:20px;color:#fff;letter-spacing:-.3px;">VoltDrive</div>
+        <div style="font-size:12px;color:#8a8c92;font-weight:500;letter-spacing:.2px;">Premium car control · Voyah · Deepal · Dongfeng</div>
+      </div>
+    </div>
+    <div onClick="{{ toggleLang }}" style="cursor:pointer;display:flex;align-items:center;gap:2px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:999px;padding:5px;font-family:'Sora';font-weight:600;font-size:13px;user-select:none;">
+      <span style="{{ enPillStyle }}">EN</span>
+      <span style="{{ uzPillStyle }}">UZ</span>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,320px);gap:44px 40px;justify-content:start;">
+
+    <!-- ============ SCREEN 1 · HOME (VOYAH) ============ -->
+    <div>
+      <div style="font-family:'Sora';font-size:13px;font-weight:600;color:#9a9ca2;margin:0 0 14px 6px;letter-spacing:.3px;"><span style="color:#FF6A1A;">01</span> · <span data-i18n="lbl.home">Home</span> — Voyah</div>
+      <div class="frame">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px 4px;font-size:13px;font-weight:700;color:#fff;">
+          <span>19:02</span>
+          <span style="display:flex;gap:6px;align-items:center;font-size:14px;color:#e9eaee;"><i data-lucide="signal"></i><i data-lucide="wifi"></i><i data-lucide="battery-medium"></i></span>
+        </div>
+
+        <div style="padding:14px 22px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div style="font-family:'Sora';font-weight:700;font-size:26px;color:#fff;letter-spacing:-.5px;">Voyah Free</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:5px;color:#86888e;font-size:13px;font-weight:500;"><i data-lucide="route" style="font-size:14px;color:#FF6A1A;"></i><span data-i18n="home.range">187 km range</span></div>
+            </div>
+            <div style="width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="settings-2"></i></div>
+          </div>
+
+          <div style="width:100%;height:150px;margin-top:8px;border-radius:20px;overflow:hidden;background:#0a0b0c;"><img src="cars/voyah.jpg" alt="Voyah Free" style="width:100%;height:100%;object-fit:cover;object-position:center 30%;"></div>
+
+          <div style="display:flex;gap:10px;margin-top:18px;">
+            <div style="flex:1;height:54px;border-radius:17px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;color:#b9bbc0;font-size:20px;"><i data-lucide="lock"></i></div>
+            <div style="flex:1;height:54px;border-radius:17px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;color:#b9bbc0;font-size:20px;"><i data-lucide="snowflake"></i></div>
+            <div style="flex:1;height:54px;border-radius:17px;background:linear-gradient(150deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;box-shadow:0 10px 22px -8px rgba(255,90,0,.7);"><i data-lucide="zap"></i></div>
+            <div style="flex:1;height:54px;border-radius:17px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;color:#b9bbc0;font-size:20px;"><i data-lucide="fan"></i></div>
+          </div>
+
+          <div style="margin-top:16px;display:flex;flex-direction:column;gap:9px;">
+            <div class="listrow" style="display:flex;align-items:center;gap:13px;padding:13px 14px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);transition:background .15s;">
+              <div style="width:38px;height:38px;border-radius:12px;background:rgba(255,106,26,.14);display:flex;align-items:center;justify-content:center;color:#FF7A2E;font-size:17px;"><i data-lucide="sliders-horizontal"></i></div>
+              <div style="flex:1;"><div style="color:#fff;font-weight:600;font-size:14px;" data-i18n="home.control">Control</div><div style="color:#7e8086;font-size:12px;margin-top:1px;" data-i18n="home.control.sub">Max control mode</div></div>
+              <i data-lucide="chevron-right" style="color:#6a6c72;font-size:18px;"></i>
+            </div>
+            <div class="listrow" style="display:flex;align-items:center;gap:13px;padding:13px 14px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);transition:background .15s;">
+              <div style="width:38px;height:38px;border-radius:12px;background:rgba(255,106,26,.14);display:flex;align-items:center;justify-content:center;color:#FF7A2E;font-size:17px;"><i data-lucide="thermometer"></i></div>
+              <div style="flex:1;"><div style="color:#fff;font-weight:600;font-size:14px;" data-i18n="home.climate">Climate</div><div style="color:#7e8086;font-size:12px;margin-top:1px;" data-i18n="home.climate.sub">Interior 20°C</div></div>
+              <i data-lucide="chevron-right" style="color:#6a6c72;font-size:18px;"></i>
+            </div>
+            <div class="listrow" style="display:flex;align-items:center;gap:13px;padding:13px 14px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);transition:background .15s;">
+              <div style="width:38px;height:38px;border-radius:12px;background:rgba(255,106,26,.14);display:flex;align-items:center;justify-content:center;color:#FF7A2E;font-size:17px;"><i data-lucide="map-pin"></i></div>
+              <div style="flex:1;"><div style="color:#fff;font-weight:600;font-size:14px;" data-i18n="home.location">Location</div><div style="color:#7e8086;font-size:12px;margin-top:1px;">87 rue Boston</div></div>
+              <i data-lucide="chevron-right" style="color:#6a6c72;font-size:18px;"></i>
+            </div>
+          </div>
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;align-items:center;padding:16px 30px 24px;background:linear-gradient(to top,rgba(10,11,13,.96) 40%,rgba(10,11,13,0));">
+          <i data-lucide="layout-grid" style="font-size:21px;color:#FF6A1A;"></i>
+          <i data-lucide="zap" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="map-pin" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="user" style="font-size:21px;color:#6a6c72;"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 2 · CLIMATE ============ -->
+    <div>
+      <div style="font-family:'Sora';font-size:13px;font-weight:600;color:#9a9ca2;margin:0 0 14px 6px;letter-spacing:.3px;"><span style="color:#FF6A1A;">02</span> · <span data-i18n="lbl.climate">Climate</span></div>
+      <div class="frame">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px 4px;font-size:13px;font-weight:700;color:#fff;">
+          <span>19:02</span>
+          <span style="display:flex;gap:6px;align-items:center;font-size:14px;color:#e9eaee;"><i data-lucide="signal"></i><i data-lucide="wifi"></i><i data-lucide="battery-medium"></i></span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 22px 0;">
+          <div style="width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="chevron-left"></i></div>
+          <div style="font-family:'Sora';font-weight:700;font-size:16px;color:#fff;" data-i18n="climate.title">Climate</div>
+          <div style="width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="power"></i></div>
+        </div>
+
+        <div style="display:flex;justify-content:center;margin-top:14px;">
+          <div style="width:188px;height:188px;border-radius:50%;background:conic-gradient(#FF5A00 0deg,#FF8A2B 110deg,rgba(255,255,255,.06) 110deg 360deg);display:flex;align-items:center;justify-content:center;">
+            <div style="width:152px;height:152px;border-radius:50%;background:linear-gradient(160deg,#16171a,#0d0e10);display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.06);">
+              <div style="font-family:'Sora';font-weight:800;font-size:42px;color:#fff;letter-spacing:-1px;">20<span style="font-size:20px;vertical-align:top;color:#FF7A2E;">°</span></div>
+              <div style="color:#7e8086;font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;" data-i18n="climate.optimal">Optimal · 30%</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:18px 22px 0;display:flex;flex-direction:column;gap:13px;">
+          <div style="display:flex;align-items:center;gap:13px;">
+            <div style="width:36px;height:36px;border-radius:11px;background:rgba(255,106,26,.16);display:flex;align-items:center;justify-content:center;color:#FF7A2E;font-size:16px;"><i data-lucide="wind"></i></div>
+            <div style="flex:1;"><div style="color:#fff;font-weight:600;font-size:13px;margin-bottom:7px;display:flex;justify-content:space-between;"><span>AC</span><span style="color:#7e8086;">60%</span></div><div style="height:5px;border-radius:3px;background:rgba(255,255,255,.08);"><div style="width:60%;height:100%;border-radius:3px;background:linear-gradient(90deg,#FF8A2B,#FF4D00);"></div></div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:13px;">
+            <div style="width:36px;height:36px;border-radius:11px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;color:#b9bbc0;font-size:16px;"><i data-lucide="fan"></i></div>
+            <div style="flex:1;"><div style="color:#fff;font-weight:600;font-size:13px;margin-bottom:7px;display:flex;justify-content:space-between;"><span data-i18n="climate.fan">Fan</span><span style="color:#7e8086;">40%</span></div><div style="height:5px;border-radius:3px;background:rgba(255,255,255,.08);"><div style="width:40%;height:100%;border-radius:3px;background:rgba(255,255,255,.35);"></div></div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:13px;">
+            <div style="width:36px;height:36px;border-radius:11px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;color:#b9bbc0;font-size:16px;"><i data-lucide="flame"></i></div>
+            <div style="flex:1;"><div style="color:#fff;font-weight:600;font-size:13px;margin-bottom:7px;display:flex;justify-content:space-between;"><span data-i18n="climate.heat">Heat</span><span style="color:#7e8086;">25%</span></div><div style="height:5px;border-radius:3px;background:rgba(255,255,255,.08);"><div style="width:25%;height:100%;border-radius:3px;background:rgba(255,255,255,.35);"></div></div></div>
+          </div>
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;align-items:center;padding:16px 30px 24px;background:linear-gradient(to top,rgba(10,11,13,.96) 40%,rgba(10,11,13,0));">
+          <i data-lucide="layout-grid" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="snowflake" style="font-size:21px;color:#FF6A1A;"></i>
+          <i data-lucide="map-pin" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="user" style="font-size:21px;color:#6a6c72;"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 3 · CHARGE STATUS ============ -->
+    <div>
+      <div style="font-family:'Sora';font-size:13px;font-weight:600;color:#9a9ca2;margin:0 0 14px 6px;letter-spacing:.3px;"><span style="color:#FF6A1A;">03</span> · <span data-i18n="lbl.charge">Charge status</span></div>
+      <div class="frame">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px 4px;font-size:13px;font-weight:700;color:#fff;">
+          <span>19:02</span>
+          <span style="display:flex;gap:6px;align-items:center;font-size:14px;color:#e9eaee;"><i data-lucide="signal"></i><i data-lucide="wifi"></i><i data-lucide="battery-medium"></i></span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 22px 0;">
+          <div style="width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="chevron-left"></i></div>
+          <div style="font-family:'Sora';font-weight:700;font-size:16px;color:#fff;" data-i18n="charge.title">Car Status</div>
+          <div style="width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="bell"></i></div>
+        </div>
+
+        <div style="display:flex;justify-content:center;margin-top:12px;">
+          <div style="width:172px;height:172px;border-radius:50%;background:conic-gradient(#FF5A00 0deg,#FF8A2B 288deg,rgba(255,255,255,.06) 288deg 360deg);display:flex;align-items:center;justify-content:center;">
+            <div style="width:140px;height:140px;border-radius:50%;background:linear-gradient(160deg,#16171a,#0d0e10);display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.06);">
+              <i data-lucide="zap" style="color:#FF7A2E;font-size:18px;margin-bottom:2px;"></i>
+              <div style="font-family:'Sora';font-weight:800;font-size:40px;color:#fff;letter-spacing:-1.5px;line-height:1;">250</div>
+              <div style="color:#7e8086;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">km · 80%</div>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center;color:#86888e;font-size:12px;font-weight:600;margin-top:10px;" data-i18n="charge.total">Total charge range</div>
+
+        <div style="display:flex;gap:8px;padding:14px 22px 0;">
+          <div style="flex:1;text-align:center;padding:7px;border-radius:11px;background:rgba(255,106,26,.16);color:#FF8A3D;font-size:12px;font-weight:600;" data-i18n="charge.tab1">Car Status</div>
+          <div style="flex:1;text-align:center;padding:7px;border-radius:11px;color:#7e8086;font-size:12px;font-weight:600;" data-i18n="charge.tab2">Engine</div>
+          <div style="flex:1;text-align:center;padding:7px;border-radius:11px;color:#7e8086;font-size:12px;font-weight:600;">Climate</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 22px 0;">
+          <div style="padding:13px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
+            <div style="color:#7e8086;font-size:11px;font-weight:600;margin-bottom:8px;" data-i18n="charge.battery">Battery</div>
+            <div style="display:flex;align-items:center;gap:8px;"><div style="width:34px;height:20px;border-radius:5px;background:linear-gradient(90deg,#FF8A2B,#FF4D00);position:relative;"><div style="position:absolute;right:-4px;top:6px;width:3px;height:8px;background:#FF4D00;border-radius:0 2px 2px 0;"></div></div><div style="font-family:'Sora';font-weight:700;font-size:20px;color:#fff;">80<span style="font-size:12px;color:#7e8086;">%</span></div></div>
+          </div>
+          <div style="padding:13px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
+            <div style="color:#7e8086;font-size:11px;font-weight:600;margin-bottom:8px;" data-i18n="charge.tyre">Tyre pressure</div>
+            <div style="display:flex;align-items:baseline;gap:4px;"><div style="font-family:'Sora';font-weight:700;font-size:20px;color:#fff;">32</div><div style="color:#7e8086;font-size:11px;">PSI · optimal</div></div>
+          </div>
+        </div>
+
+        <div style="padding:10px 22px 0;">
+          <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
+            <div style="width:36px;height:36px;border-radius:11px;background:rgba(255,106,26,.16);display:flex;align-items:center;justify-content:center;color:#FF7A2E;font-size:16px;"><i data-lucide="leaf"></i></div>
+            <div style="flex:1;"><div style="color:#fff;font-weight:600;font-size:13px;" data-i18n="charge.saving">Saving mode</div><div style="color:#7e8086;font-size:11px;" data-i18n="charge.distance">Total distance · 20,000 km</div></div>
+            <div style="width:40px;height:23px;border-radius:999px;background:linear-gradient(90deg,#FF8A2B,#FF4D00);position:relative;"><div style="position:absolute;right:3px;top:3px;width:17px;height:17px;border-radius:50%;background:#fff;"></div></div>
+          </div>
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;align-items:center;padding:16px 30px 24px;background:linear-gradient(to top,rgba(10,11,13,.96) 40%,rgba(10,11,13,0));">
+          <i data-lucide="layout-grid" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="zap" style="font-size:21px;color:#FF6A1A;"></i>
+          <i data-lucide="map-pin" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="user" style="font-size:21px;color:#6a6c72;"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 4 · MAP / LOCATION ============ -->
+    <div>
+      <div style="font-family:'Sora';font-size:13px;font-weight:600;color:#9a9ca2;margin:0 0 14px 6px;letter-spacing:.3px;"><span style="color:#FF6A1A;">04</span> · <span data-i18n="lbl.map">Location</span></div>
+      <div class="frame">
+        <div style="position:absolute;inset:0;background:linear-gradient(160deg,#1b1c1f,#101113);">
+          <svg width="320" height="430" viewBox="0 0 320 430" style="position:absolute;top:0;left:0;opacity:.5;">
+            <g stroke="#2c2e33" stroke-width="1.5" fill="none">
+              <path d="M-10 80 L120 60 L200 110 L330 90"/>
+              <path d="M-10 180 L90 200 L210 160 L330 210"/>
+              <path d="M-10 300 L140 320 L240 280 L330 320"/>
+              <path d="M60 -10 L80 130 L40 260 L70 440"/>
+              <path d="M180 -10 L160 120 L210 250 L190 440"/>
+              <path d="M280 -10 L260 140 L300 270 L270 440"/>
+            </g>
+          </svg>
+          <svg width="320" height="430" viewBox="0 0 320 430" style="position:absolute;top:0;left:0;">
+            <path d="M70 350 C 90 280, 150 290, 160 230 S 230 160, 240 90" fill="none" stroke="url(#rg)" stroke-width="5" stroke-linecap="round"/>
+            <defs><linearGradient id="rg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FF4D00"/><stop offset="1" stop-color="#FF9D3D"/></linearGradient></defs>
+          </svg>
+          <div style="position:absolute;left:58px;top:338px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 0 0 5px rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;"><div style="width:9px;height:9px;border-radius:50%;background:#1b1c1f;"></div></div>
+          <div style="position:absolute;left:228px;top:74px;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:linear-gradient(150deg,#FF8A2B,#FF4D00);box-shadow:0 8px 18px -4px rgba(255,77,0,.7);display:flex;align-items:center;justify-content:center;"><i data-lucide="zap" style="transform:rotate(45deg);color:#fff;font-size:15px;"></i></div>
+        </div>
+
+        <div style="position:relative;display:flex;justify-content:space-between;align-items:center;padding:18px 24px 4px;font-size:13px;font-weight:700;color:#fff;">
+          <span>19:02</span>
+          <span style="display:flex;gap:6px;align-items:center;font-size:14px;color:#e9eaee;"><i data-lucide="signal"></i><i data-lucide="wifi"></i><i data-lucide="battery-medium"></i></span>
+        </div>
+        <div style="position:relative;display:flex;justify-content:space-between;align-items:center;padding:10px 22px 0;">
+          <div style="width:40px;height:40px;border-radius:13px;background:rgba(20,21,24,.7);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="chevron-left"></i></div>
+          <div style="display:flex;gap:8px;">
+            <div style="width:40px;height:40px;border-radius:13px;background:rgba(20,21,24,.7);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="layers"></i></div>
+            <div style="width:40px;height:40px;border-radius:13px;background:rgba(20,21,24,.7);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="navigation"></i></div>
+          </div>
+        </div>
+
+        <div style="position:absolute;left:16px;right:16px;bottom:88px;padding:16px 18px;border-radius:24px;background:rgba(18,19,22,.86);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.08);box-shadow:0 20px 40px -16px rgba(0,0,0,.6);">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div><div style="font-family:'Sora';font-weight:700;font-size:17px;color:#fff;">Boston Hills</div><div style="color:#7e8086;font-size:12px;margin-top:2px;">0923 Boston · 90923</div></div>
+            <div style="color:#FF8A3D;font-size:13px;font-weight:700;">3.3 km</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px;margin:13px 0;">
+            <div style="display:flex;align-items:center;gap:9px;color:#c8cace;font-size:12px;"><i data-lucide="route" style="color:#FF7A2E;font-size:15px;"></i><span data-i18n="map.eta">190 km · 19 min to 100%</span></div>
+            <div style="display:flex;align-items:center;gap:9px;color:#c8cace;font-size:12px;"><i data-lucide="plug-zap" style="color:#FF7A2E;font-size:15px;"></i><span data-i18n="map.stations">1 of 3 charging stations available</span></div>
+          </div>
+          <div style="height:46px;border-radius:15px;background:linear-gradient(150deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;gap:8px;color:#fff;font-family:'Sora';font-weight:700;font-size:15px;box-shadow:0 12px 24px -8px rgba(255,90,0,.6);"><span data-i18n="map.go">Let's Go</span><i data-lucide="arrow-right" style="font-size:17px;"></i></div>
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;align-items:center;padding:16px 30px 24px;background:linear-gradient(to top,rgba(10,11,13,.96) 40%,rgba(10,11,13,0));">
+          <i data-lucide="layout-grid" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="zap" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="map-pin" style="font-size:21px;color:#FF6A1A;"></i>
+          <i data-lucide="user" style="font-size:21px;color:#6a6c72;"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 5 · SEAT ADJUSTMENT ============ -->
+    <div>
+      <div style="font-family:'Sora';font-size:13px;font-weight:600;color:#9a9ca2;margin:0 0 14px 6px;letter-spacing:.3px;"><span style="color:#FF6A1A;">05</span> · <span data-i18n="lbl.seat">Seat adjustment</span></div>
+      <div class="frame">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px 4px;font-size:13px;font-weight:700;color:#fff;">
+          <span>19:02</span>
+          <span style="display:flex;gap:6px;align-items:center;font-size:14px;color:#e9eaee;"><i data-lucide="signal"></i><i data-lucide="wifi"></i><i data-lucide="battery-medium"></i></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 22px 0;">
+          <div style="width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="chevron-left"></i></div>
+          <div style="font-family:'Sora';font-weight:700;font-size:16px;color:#fff;" data-i18n="seat.title">Seat Adjustment</div>
+          <div style="width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="rotate-3d"></i></div>
+        </div>
+
+        <div style="position:relative;height:300px;margin-top:6px;display:flex;align-items:center;justify-content:center;">
+          <div style="position:absolute;width:240px;height:240px;border-radius:50%;border:1.5px dashed rgba(255,255,255,.1);"></div>
+          <div style="position:absolute;width:240px;height:240px;border-radius:50%;background:conic-gradient(from 200deg,#FF5A00 0deg,#FF9D3D 90deg,transparent 90deg 360deg);-webkit-mask:radial-gradient(circle,transparent 113px,#000 114px);mask:radial-gradient(circle,transparent 113px,#000 114px);"></div>
+          <div style="position:absolute;top:38px;left:42px;color:#7e8086;font-size:11px;font-weight:600;">0°</div>
+          <div style="position:absolute;top:10px;left:140px;color:#FF8A3D;font-size:11px;font-weight:700;">60°</div>
+          <div style="position:absolute;top:96px;right:18px;color:#7e8086;font-size:11px;font-weight:600;">90°</div>
+          <div style="position:absolute;bottom:64px;left:30px;color:#7e8086;font-size:11px;font-weight:600;">30°</div>
+          <image-slot id="seat-img" style="display:block;width:150px;height:200px;" shape="rounded" radius="24" placeholder="Seat"></image-slot>
+          <div style="position:absolute;bottom:30px;background:rgba(18,19,22,.85);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:6px 16px;font-family:'Sora';font-weight:700;font-size:18px;color:#fff;">62<span style="font-size:12px;color:#FF7A2E;">°</span></div>
+        </div>
+
+        <div style="padding:6px 22px 0;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div style="width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:20px;"><i data-lucide="minus"></i></div>
+            <div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.08);position:relative;"><div style="width:66%;height:100%;border-radius:3px;background:linear-gradient(90deg,#FF8A2B,#FF4D00);"></div><div style="position:absolute;left:64%;top:-7px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 4px 10px rgba(0,0,0,.4);"></div></div>
+            <div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(150deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;box-shadow:0 10px 22px -8px rgba(255,90,0,.7);"><i data-lucide="plus"></i></div>
+          </div>
+          <div style="text-align:center;color:#7e8086;font-size:12px;font-weight:600;margin-top:12px;" data-i18n="seat.recline">Recline angle · Driver seat</div>
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;align-items:center;padding:16px 30px 24px;background:linear-gradient(to top,rgba(10,11,13,.96) 40%,rgba(10,11,13,0));">
+          <i data-lucide="layout-grid" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="armchair" style="font-size:21px;color:#FF6A1A;"></i>
+          <i data-lucide="map-pin" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="user" style="font-size:21px;color:#6a6c72;"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 6 · GARAGE ============ -->
+    <div>
+      <div style="font-family:'Sora';font-size:13px;font-weight:600;color:#9a9ca2;margin:0 0 14px 6px;letter-spacing:.3px;"><span style="color:#FF6A1A;">06</span> · <span data-i18n="lbl.garage">My Garage</span></div>
+      <div class="frame">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px 4px;font-size:13px;font-weight:700;color:#fff;">
+          <span>19:02</span>
+          <span style="display:flex;gap:6px;align-items:center;font-size:14px;color:#e9eaee;"><i data-lucide="signal"></i><i data-lucide="wifi"></i><i data-lucide="battery-medium"></i></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 22px 0;">
+          <div><div style="font-family:'Sora';font-weight:700;font-size:22px;color:#fff;letter-spacing:-.4px;" data-i18n="garage.title">My Garage</div><div style="color:#7e8086;font-size:12px;margin-top:2px;" data-i18n="garage.sub">3 vehicles connected</div></div>
+          <div style="width:42px;height:42px;border-radius:13px;background:linear-gradient(150deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;box-shadow:0 10px 22px -8px rgba(255,90,0,.7);"><i data-lucide="plus"></i></div>
+        </div>
+
+        <div style="margin:16px 22px 0;height:44px;border-radius:15px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:10px;padding:0 14px;color:#7e8086;font-size:13px;"><i data-lucide="search" style="font-size:16px;"></i><span data-i18n="garage.search">Search vehicle…</span></div>
+
+        <div style="padding:16px 22px 0;display:flex;flex-direction:column;gap:11px;">
+          <div style="position:relative;display:flex;align-items:center;gap:13px;padding:14px;border-radius:20px;background:linear-gradient(120deg,rgba(255,106,26,.15),rgba(255,77,0,.05));border:1px solid rgba(255,122,46,.35);">
+            <div style="position:absolute;top:12px;right:14px;display:flex;align-items:center;gap:5px;color:#FF8A3D;font-size:11px;font-weight:700;"><span style="width:7px;height:7px;border-radius:50%;background:#37d67a;box-shadow:0 0 8px #37d67a;"></span><span data-i18n="garage.active">ACTIVE</span></div>
+            <div style="width:78px;height:56px;flex:none;border-radius:13px;overflow:hidden;"><img src="cars/voyah.jpg" alt="Voyah" style="width:100%;height:100%;object-fit:cover;object-position:center 32%;"></div>
+            <div style="flex:1;"><div style="color:#fff;font-weight:700;font-size:15px;font-family:'Sora';">Voyah Free</div><div style="color:#9a9ca2;font-size:12px;margin-top:3px;display:flex;gap:10px;"><span>187 km</span><span>·</span><span>80%</span></div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:13px;padding:14px;border-radius:20px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
+            <div style="width:78px;height:56px;flex:none;border-radius:13px;overflow:hidden;"><img src="cars/deepal.jpg" alt="Deepal" style="width:100%;height:100%;object-fit:cover;object-position:center 55%;"></div>
+            <div style="flex:1;"><div style="color:#fff;font-weight:700;font-size:15px;font-family:'Sora';">Deepal S07</div><div style="color:#9a9ca2;font-size:12px;margin-top:3px;display:flex;gap:10px;"><span>205 km</span><span>·</span><span>62%</span></div></div>
+            <i data-lucide="chevron-right" style="color:#6a6c72;font-size:18px;"></i>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:13px;padding:14px;border-radius:20px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
+            <div style="width:78px;height:56px;flex:none;border-radius:13px;overflow:hidden;"><img src="cars/dongfeng.jpg" alt="Dongfeng" style="width:100%;height:100%;object-fit:cover;object-position:center 38%;"></div>
+            <div style="flex:1;"><div style="color:#fff;font-weight:700;font-size:15px;font-family:'Sora';">Dongfeng AX7</div><div style="color:#9a9ca2;font-size:12px;margin-top:3px;display:flex;gap:10px;"><span>320 km</span><span>·</span><span>54%</span></div></div>
+            <i data-lucide="chevron-right" style="color:#6a6c72;font-size:18px;"></i>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:20px;border:1.5px dashed rgba(255,255,255,.14);color:#86888e;font-size:13px;font-weight:600;"><i data-lucide="plus-circle" style="font-size:17px;color:#FF7A2E;"></i><span data-i18n="garage.add">Add new vehicle</span></div>
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;align-items:center;padding:16px 30px 24px;background:linear-gradient(to top,rgba(10,11,13,.96) 40%,rgba(10,11,13,0));">
+          <i data-lucide="layout-grid" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="car" style="font-size:21px;color:#FF6A1A;"></i>
+          <i data-lucide="map-pin" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="user" style="font-size:21px;color:#6a6c72;"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 7 · ENGINE / DOOR CONTROL ============ -->
+    <div>
+      <div style="font-family:'Sora';font-size:13px;font-weight:600;color:#9a9ca2;margin:0 0 14px 6px;letter-spacing:.3px;"><span style="color:#FF6A1A;">07</span> · <span data-i18n="lbl.control">Engine &amp; doors</span></div>
+      <div class="frame">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px 4px;font-size:13px;font-weight:700;color:#fff;">
+          <span>19:02</span>
+          <span style="display:flex;gap:6px;align-items:center;font-size:14px;color:#e9eaee;"><i data-lucide="signal"></i><i data-lucide="wifi"></i><i data-lucide="battery-medium"></i></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 22px 0;">
+          <div style="width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="chevron-left"></i></div>
+          <div style="width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="more-horizontal"></i></div>
+        </div>
+
+        <div style="text-align:center;padding:8px 22px 0;">
+          <div style="color:#7e8086;font-size:12px;font-weight:500;" data-i18n="engine.hello">Hello Matias, welcome back</div>
+          <div style="font-family:'Sora';font-weight:700;font-size:24px;color:#fff;letter-spacing:-.4px;margin-top:2px;">Voyah Free</div>
+        </div>
+
+        <div style="width:84%;height:118px;margin:8px auto 0;border-radius:20px;overflow:hidden;background:#0a0b0c;"><img src="cars/voyah.jpg" alt="Voyah Free" style="width:100%;height:100%;object-fit:cover;object-position:center 30%;"></div>
+
+        <div style="text-align:center;margin-top:14px;">
+          <div style="color:#7e8086;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;" data-i18n="engine.range">Your range</div>
+          <div style="font-family:'Sora';font-weight:800;font-size:40px;color:#fff;letter-spacing:-1.5px;line-height:1.1;">278<span style="font-size:18px;color:#FF7A2E;margin-left:3px;">km</span></div>
+        </div>
+
+        <div style="display:flex;justify-content:center;margin-top:14px;">
+          <div style="width:96px;height:96px;border-radius:50%;background:radial-gradient(circle at 50% 35%,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;color:#fff;font-size:34px;box-shadow:0 0 0 8px rgba(255,90,0,.12),0 16px 36px -8px rgba(255,90,0,.7);"><i data-lucide="power"></i></div>
+        </div>
+        <div style="text-align:center;color:#86888e;font-size:12px;font-weight:600;margin-top:12px;" data-i18n="engine.tap">Tap to start &amp; stop engine</div>
+
+        <div style="display:flex;gap:9px;padding:16px 22px 0;">
+          <div style="flex:1;height:48px;border-radius:15px;background:rgba(255,106,26,.14);border:1px solid rgba(255,122,46,.3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#FF8A3D;"><i data-lucide="lock" style="font-size:17px;"></i><span style="font-size:9px;font-weight:600;" data-i18n="engine.locked">Locked</span></div>
+          <div style="flex:1;height:48px;border-radius:15px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#b9bbc0;"><i data-lucide="car-front" style="font-size:17px;"></i><span style="font-size:9px;font-weight:600;" data-i18n="engine.trunk">Trunk</span></div>
+          <div style="flex:1;height:48px;border-radius:15px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#b9bbc0;"><i data-lucide="lightbulb" style="font-size:17px;"></i><span style="font-size:9px;font-weight:600;" data-i18n="engine.lights">Lights</span></div>
+          <div style="flex:1;height:48px;border-radius:15px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#b9bbc0;"><i data-lucide="volume-2" style="font-size:17px;"></i><span style="font-size:9px;font-weight:600;" data-i18n="engine.horn">Horn</span></div>
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;align-items:center;padding:16px 30px 24px;background:linear-gradient(to top,rgba(10,11,13,.96) 40%,rgba(10,11,13,0));">
+          <i data-lucide="layout-grid" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="power" style="font-size:21px;color:#FF6A1A;"></i>
+          <i data-lucide="map-pin" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="user" style="font-size:21px;color:#6a6c72;"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 8 · PROFILE ============ -->
+    <div>
+      <div style="font-family:'Sora';font-size:13px;font-weight:600;color:#9a9ca2;margin:0 0 14px 6px;letter-spacing:.3px;"><span style="color:#FF6A1A;">08</span> · <span data-i18n="lbl.profile">Profile</span></div>
+      <div class="frame">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px 4px;font-size:13px;font-weight:700;color:#fff;">
+          <span>19:02</span>
+          <span style="display:flex;gap:6px;align-items:center;font-size:14px;color:#e9eaee;"><i data-lucide="signal"></i><i data-lucide="wifi"></i><i data-lucide="battery-medium"></i></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 22px 0;">
+          <div style="font-family:'Sora';font-weight:700;font-size:22px;color:#fff;letter-spacing:-.4px;" data-i18n="profile.title">Profile</div>
+          <div style="width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="settings-2"></i></div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:14px;padding:16px 22px 0;">
+          <image-slot id="avatar" style="display:block;width:62px;height:62px;flex:none;" shape="circle" placeholder="Foto"></image-slot>
+          <div style="flex:1;"><div style="font-family:'Sora';font-weight:700;font-size:18px;color:#fff;">Matias Karimov</div><div style="color:#7e8086;font-size:12px;margin-top:2px;">matias@voltdrive.com</div></div>
+        </div>
+
+        <div style="margin:16px 22px 0;padding:16px;border-radius:20px;background:linear-gradient(120deg,#3a2a12,#1c1407);border:1px solid rgba(214,178,92,.4);position:relative;overflow:hidden;">
+          <div style="position:absolute;top:-20px;right:-10px;font-size:80px;color:rgba(214,178,92,.12);"><i data-lucide="crown"></i></div>
+          <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="crown" style="color:#E8C871;font-size:18px;"></i><span style="font-family:'Sora';font-weight:700;font-size:15px;background:linear-gradient(90deg,#F4DFA0,#C9A24B);-webkit-background-clip:text;background-clip:text;color:transparent;">Gold Premium</span></div>
+          <div style="color:#cdbb8e;font-size:12px;margin-top:6px;line-height:1.5;" data-i18n="profile.premium">Full remote control · priority support · valid until Dec 2026</div>
+        </div>
+
+        <div style="padding:16px 22px 0;display:flex;flex-direction:column;gap:3px;">
+          <div class="listrow" style="display:flex;align-items:center;gap:13px;padding:12px 12px;border-radius:14px;transition:background .15s;"><div style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:16px;"><i data-lucide="car"></i></div><div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.vehicles">My vehicles</div><i data-lucide="chevron-right" style="color:#6a6c72;font-size:17px;"></i></div>
+          <div class="listrow" style="display:flex;align-items:center;gap:13px;padding:12px 12px;border-radius:14px;transition:background .15s;"><div style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:16px;"><i data-lucide="shield-check"></i></div><div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.security">Security &amp; PIN</div><i data-lucide="chevron-right" style="color:#6a6c72;font-size:17px;"></i></div>
+          <div class="listrow" style="display:flex;align-items:center;gap:13px;padding:12px 12px;border-radius:14px;transition:background .15s;"><div style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:16px;"><i data-lucide="bell"></i></div><div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.notif">Notifications</div><i data-lucide="chevron-right" style="color:#6a6c72;font-size:17px;"></i></div>
+          <div class="listrow" style="display:flex;align-items:center;gap:13px;padding:12px 12px;border-radius:14px;transition:background .15s;"><div style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:16px;"><i data-lucide="languages"></i></div><div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.lang">Language</div><span style="color:#FF8A3D;font-size:12px;font-weight:600;">EN · UZ</span></div>
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;align-items:center;padding:16px 30px 24px;background:linear-gradient(to top,rgba(10,11,13,.96) 40%,rgba(10,11,13,0));">
+          <i data-lucide="layout-grid" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="zap" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="map-pin" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="user" style="font-size:21px;color:#FF6A1A;"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 9 · SIGN UP / AUTH ============ -->
+    <div>
+      <div style="font-family:'Sora';font-size:13px;font-weight:600;color:#9a9ca2;margin:0 0 14px 6px;letter-spacing:.3px;"><span style="color:#FF6A1A;">09</span> · <span data-i18n="lbl.auth">Sign up</span></div>
+      <div class="frame">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px 4px;font-size:13px;font-weight:700;color:#fff;">
+          <span>19:02</span>
+          <span style="display:flex;gap:6px;align-items:center;font-size:14px;color:#e9eaee;"><i data-lucide="signal"></i><i data-lucide="wifi"></i><i data-lucide="battery-medium"></i></span>
+        </div>
+
+        <div style="padding:30px 26px 0;">
+          <div style="width:54px;height:54px;border-radius:17px;background:linear-gradient(150deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;box-shadow:0 12px 26px -8px rgba(255,90,0,.6);"><i data-lucide="zap"></i></div>
+          <div style="font-family:'Sora';font-weight:800;font-size:27px;color:#fff;letter-spacing:-.6px;margin-top:22px;" data-i18n="auth.title">Create account</div>
+          <div style="color:#86888e;font-size:13px;margin-top:7px;line-height:1.5;" data-i18n="auth.sub">Securely control your vehicles from anywhere</div>
+
+          <div style="height:52px;border-radius:16px;background:#fff;display:flex;align-items:center;justify-content:center;gap:11px;margin-top:26px;cursor:pointer;">
+            <svg width="19" height="19" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.3 26.7 36 24 36c-5.3 0-9.6-3.1-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C40.9 36.3 44 30.6 44 24c0-1.3-.1-2.3-.4-3.5z"/></svg>
+            <span style="color:#1a1a1a;font-family:'Sora';font-weight:700;font-size:14px;" data-i18n="auth.google">Continue with Gmail</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:12px;margin:20px 0;"><div style="flex:1;height:1px;background:rgba(255,255,255,.1);"></div><span style="color:#6a6c72;font-size:12px;font-weight:600;" data-i18n="auth.or">or</span><div style="flex:1;height:1px;background:rgba(255,255,255,.1);"></div></div>
+
+          <div style="height:52px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:11px;padding:0 16px;margin-bottom:12px;"><i data-lucide="mail" style="color:#7e8086;font-size:17px;"></i><span style="color:#8a8c92;font-size:14px;">bexruz@gmail.com</span></div>
+          <div style="height:52px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:11px;padding:0 16px;"><i data-lucide="lock" style="color:#7e8086;font-size:17px;"></i><span style="flex:1;color:#8a8c92;font-size:14px;letter-spacing:3px;">••••••••</span><i data-lucide="eye" style="color:#7e8086;font-size:17px;"></i></div>
+
+          <div style="height:54px;border-radius:16px;background:linear-gradient(150deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;gap:8px;margin-top:22px;color:#fff;font-family:'Sora';font-weight:700;font-size:15px;box-shadow:0 14px 28px -8px rgba(255,90,0,.6);"><span data-i18n="auth.signup">Create account</span><i data-lucide="arrow-right" style="font-size:17px;"></i></div>
+          <div style="text-align:center;color:#86888e;font-size:13px;margin-top:18px;"><span data-i18n="auth.have">Already have an account?</span> <span style="color:#FF8A3D;font-weight:700;" data-i18n="auth.signin">Sign in</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 10 · SMART ACCESS / AUTO-UNLOCK ============ -->
+    <div>
+      <div style="font-family:'Sora';font-size:13px;font-weight:600;color:#9a9ca2;margin:0 0 14px 6px;letter-spacing:.3px;"><span style="color:#FF6A1A;">10</span> · <span data-i18n="lbl.access">Smart access</span></div>
+      <div class="frame">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px 4px;font-size:13px;font-weight:700;color:#fff;">
+          <span>19:02</span>
+          <span style="display:flex;gap:6px;align-items:center;font-size:14px;color:#e9eaee;"><i data-lucide="signal"></i><i data-lucide="wifi"></i><i data-lucide="battery-medium"></i></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 22px 0;">
+          <div style="width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="chevron-left"></i></div>
+          <div style="font-family:'Sora';font-weight:700;font-size:16px;color:#fff;" data-i18n="access.title">Smart Access</div>
+          <div style="width:40px;height:40px;"></div>
+        </div>
+
+        <div style="position:relative;height:230px;display:flex;align-items:center;justify-content:center;margin-top:4px;">
+          <div class="pulse" style="position:absolute;width:210px;height:210px;border-radius:50%;border:1.5px solid rgba(255,106,26,.12);"></div>
+          <div class="pulse" style="position:absolute;width:150px;height:150px;border-radius:50%;border:1.5px solid rgba(255,106,26,.2);animation-delay:.6s;"></div>
+          <div class="pulse" style="position:absolute;width:96px;height:96px;border-radius:50%;border:1.5px solid rgba(255,106,26,.32);animation-delay:1.2s;"></div>
+          <div style="position:absolute;width:88px;height:88px;border-radius:50%;background:radial-gradient(circle,rgba(255,106,26,.22),transparent 70%);"></div>
+          <div style="width:62px;height:62px;border-radius:18px;background:linear-gradient(155deg,#26272b,#131418);border:1px solid rgba(255,122,46,.4);display:flex;align-items:center;justify-content:center;color:#FF8A3D;font-size:26px;z-index:2;box-shadow:0 0 24px -4px rgba(255,90,0,.5);"><i data-lucide="car-front"></i></div>
+          <div style="position:absolute;left:34px;top:64px;display:flex;flex-direction:column;align-items:center;gap:3px;z-index:2;">
+            <div style="width:34px;height:34px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;color:#15161a;font-size:16px;box-shadow:0 4px 12px rgba(0,0,0,.4);"><i data-lucide="smartphone"></i></div>
+            <span style="font-size:10px;font-weight:700;color:#FF8A3D;background:rgba(18,19,22,.85);padding:2px 6px;border-radius:8px;">2.0 m</span>
+          </div>
+        </div>
+
+        <div style="margin:0 22px;padding:13px 16px;border-radius:18px;background:linear-gradient(120deg,rgba(55,214,122,.12),rgba(55,214,122,.04));border:1px solid rgba(55,214,122,.3);display:flex;align-items:center;gap:11px;">
+          <i data-lucide="lock-open" style="color:#43d684;font-size:19px;"></i>
+          <div style="flex:1;"><div style="color:#fff;font-weight:700;font-size:13px;" data-i18n="access.unlocked">Doors unlocked</div><div style="color:#9a9ca2;font-size:11px;margin-top:1px;" data-i18n="access.near">Phone detected nearby</div></div>
+        </div>
+
+        <div style="padding:14px 22px 0;display:flex;flex-direction:column;gap:9px;">
+          <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
+            <div style="width:34px;height:34px;border-radius:10px;background:rgba(255,106,26,.16);display:flex;align-items:center;justify-content:center;color:#FF7A2E;font-size:15px;"><i data-lucide="radar"></i></div>
+            <div style="flex:1;"><div style="color:#fff;font-weight:600;font-size:13px;" data-i18n="access.auto">Auto-unlock on approach</div><div style="color:#7e8086;font-size:11px;" data-i18n="access.autosub">Unlocks within 2 m</div></div>
+            <div style="width:40px;height:23px;border-radius:999px;background:linear-gradient(90deg,#FF8A2B,#FF4D00);position:relative;"><div style="position:absolute;right:3px;top:3px;width:17px;height:17px;border-radius:50%;background:#fff;"></div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
+            <div style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:15px;"><i data-lucide="footprints"></i></div>
+            <div style="flex:1;"><div style="color:#fff;font-weight:600;font-size:13px;" data-i18n="access.walk">Walk-away auto-lock</div><div style="color:#7e8086;font-size:11px;" data-i18n="access.walksub">Locks when you leave</div></div>
+            <div style="width:40px;height:23px;border-radius:999px;background:linear-gradient(90deg,#FF8A2B,#FF4D00);position:relative;"><div style="position:absolute;right:3px;top:3px;width:17px;height:17px;border-radius:50%;background:#fff;"></div></div>
+          </div>
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;align-items:center;padding:16px 30px 24px;background:linear-gradient(to top,rgba(10,11,13,.96) 40%,rgba(10,11,13,0));">
+          <i data-lucide="layout-grid" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="radar" style="font-size:21px;color:#FF6A1A;"></i>
+          <i data-lucide="map-pin" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="user" style="font-size:21px;color:#6a6c72;"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 11 · FAMILY SHARING ============ -->
+    <div>
+      <div style="font-family:'Sora';font-size:13px;font-weight:600;color:#9a9ca2;margin:0 0 14px 6px;letter-spacing:.3px;"><span style="color:#FF6A1A;">11</span> · <span data-i18n="lbl.family">Family sharing</span></div>
+      <div class="frame">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px 4px;font-size:13px;font-weight:700;color:#fff;">
+          <span>19:02</span>
+          <span style="display:flex;gap:6px;align-items:center;font-size:14px;color:#e9eaee;"><i data-lucide="signal"></i><i data-lucide="wifi"></i><i data-lucide="battery-medium"></i></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 22px 0;">
+          <div style="width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-size:18px;"><i data-lucide="chevron-left"></i></div>
+          <div style="font-family:'Sora';font-weight:700;font-size:16px;color:#fff;" data-i18n="family.title">Family Sharing</div>
+          <div style="width:40px;height:40px;border-radius:13px;background:linear-gradient(150deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;box-shadow:0 10px 22px -8px rgba(255,90,0,.7);"><i data-lucide="user-plus"></i></div>
+        </div>
+
+        <div style="margin:16px 22px 0;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);display:flex;align-items:center;gap:12px;">
+          <div style="width:50px;height:38px;border-radius:11px;overflow:hidden;flex:none;"><img src="cars/voyah.jpg" alt="Voyah" style="width:100%;height:100%;object-fit:cover;object-position:center 32%;"></div>
+          <div style="flex:1;"><div style="color:#fff;font-weight:700;font-size:14px;font-family:'Sora';">Voyah Free</div><div style="color:#7e8086;font-size:11px;margin-top:2px;" data-i18n="family.shared">Shared with 3 people</div></div>
+          <i data-lucide="chevron-down" style="color:#6a6c72;font-size:18px;"></i>
+        </div>
+
+        <div style="color:#7e8086;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin:18px 22px 0;" data-i18n="family.members">Members</div>
+        <div style="padding:10px 22px 0;display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(150deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Sora';font-weight:700;font-size:15px;">MK</div>
+            <div style="flex:1;"><div style="color:#fff;font-weight:600;font-size:14px;">Matias K. <span style="color:#7e8086;font-weight:500;font-size:12px;">(you)</span></div><div style="color:#7e8086;font-size:11px;" data-i18n="family.full">Full access</div></div>
+            <div style="padding:4px 11px;border-radius:999px;background:rgba(255,106,26,.16);color:#FF8A3D;font-size:11px;font-weight:700;" data-i18n="family.owner">Owner</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:42px;height:42px;border-radius:50%;background:#2c2e33;display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-family:'Sora';font-weight:700;font-size:15px;">AK</div>
+            <div style="flex:1;"><div style="color:#fff;font-weight:600;font-size:14px;">Aziza K.</div><div style="color:#7e8086;font-size:11px;" data-i18n="family.drivesub">Drive · lock · climate</div></div>
+            <div style="padding:4px 11px;border-radius:999px;background:rgba(255,255,255,.07);color:#c8cace;font-size:11px;font-weight:700;" data-i18n="family.driver">Driver</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:42px;height:42px;border-radius:50%;background:#2c2e33;display:flex;align-items:center;justify-content:center;color:#cfd0d4;font-family:'Sora';font-weight:700;font-size:15px;">JK</div>
+            <div style="flex:1;"><div style="color:#fff;font-weight:600;font-size:14px;">Javohir K.</div><div style="color:#7e8086;font-size:11px;" data-i18n="family.limsub">Location · lock only</div></div>
+            <div style="padding:4px 11px;border-radius:999px;background:rgba(255,255,255,.07);color:#c8cace;font-size:11px;font-weight:700;" data-i18n="family.limited">Limited</div>
+          </div>
+        </div>
+
+        <div style="margin:18px 22px 0;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:16px;border:1.5px dashed rgba(255,255,255,.14);color:#86888e;font-size:13px;font-weight:600;"><i data-lucide="mail" style="font-size:16px;color:#FF7A2E;"></i><span data-i18n="family.invite">Invite via Gmail</span></div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;align-items:center;padding:16px 30px 24px;background:linear-gradient(to top,rgba(10,11,13,.96) 40%,rgba(10,11,13,0));">
+          <i data-lucide="layout-grid" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="users" style="font-size:21px;color:#FF6A1A;"></i>
+          <i data-lucide="map-pin" style="font-size:21px;color:#6a6c72;"></i>
+          <i data-lucide="user" style="font-size:21px;color:#6a6c72;"></i>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1480,&quot;height&quot;:2780}}">
+class Component extends DCLogic {
+  state = { lang: 'en' };
+
+  componentDidMount() {
+    if (window.lucide) window.lucide.createIcons();
+    // capture original English text for restore
+    this._orig = new Map();
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      this._orig.set(el, el.textContent);
+    });
+  }
+
+  componentDidUpdate() {
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  dict = {
+    'lbl.home': 'Bosh', 'lbl.climate': 'Klimat', 'lbl.charge': 'Zaryad',
+    'lbl.map': 'Xarita', 'lbl.seat': "O'rindiq", 'lbl.garage': 'Garaj',
+    'lbl.control': 'Boshqaruv', 'lbl.profile': 'Profil',
+    'home.range': '187 km masofa', 'home.control': 'Boshqaruv',
+    'home.control.sub': 'Maksimal nazorat', 'home.climate': 'Iqlim',
+    'home.climate.sub': 'Salon 20°C', 'home.location': 'Joylashuv',
+    'climate.title': 'Iqlim', 'climate.optimal': 'Optimal · 30%',
+    'climate.fan': 'Ventilyator', 'climate.heat': 'Isitish',
+    'charge.title': 'Mashina holati', 'charge.total': 'Umumiy zaryad masofasi',
+    'charge.tab1': 'Mashina', 'charge.tab2': 'Dvigatel',
+    'charge.battery': 'Batareya', 'charge.tyre': 'Shina bosimi',
+    'charge.saving': 'Tejamkor rejim', 'charge.distance': 'Umumiy masofa · 20,000 km',
+    'map.eta': '190 km · 100% gacha 19 daqiqa', 'map.stations': '3 tadan 1 zaryad stansiyasi mavjud',
+    'map.go': 'Yo\u2018lga chiqish', 'seat.title': "O'rindiq sozlamasi",
+    'seat.recline': 'Suyanish burchagi · Haydovchi', 'garage.title': 'Mening garajim',
+    'garage.sub': '3 ta mashina ulangan', 'garage.search': 'Mashina qidirish…',
+    'garage.active': 'FAOL', 'garage.add': 'Yangi mashina qo\u2018shish',
+    'engine.hello': 'Salom Matias, xush kelibsiz', 'engine.range': 'Masofa zaxirasi',
+    'engine.tap': 'Dvigatelni yoqish/o\u2018chirish', 'engine.locked': 'Yopiq',
+    'engine.trunk': 'Bagaj', 'engine.lights': 'Faralar', 'engine.horn': 'Signal',
+    'profile.title': 'Profil', 'profile.premium': "To'liq masofaviy boshqaruv · ustuvor yordam · 2026 dek. gacha",
+    'profile.vehicles': 'Mening mashinalarim', 'profile.security': 'Xavfsizlik va PIN',
+    'profile.notif': 'Bildirishnomalar', 'profile.lang': 'Til',
+    'lbl.control': 'Dvigatel va eshik', 'lbl.profile': 'Profil', 'lbl.garage': 'Mening garajim',
+    'lbl.seat': "O'rindiq sozlamasi", 'lbl.map': 'Joylashuv', 'lbl.charge': 'Zaryad holati',
+    'lbl.climate': 'Iqlim', 'lbl.home': 'Bosh sahifa',
+    'lbl.auth': 'Ro\u2018yxatdan o\u2018tish', 'lbl.access': 'Aqlli kirish', 'lbl.family': 'Oilaviy boshqaruv',
+    'auth.title': 'Hisob yaratish', 'auth.sub': 'Mashinalaringizni istalgan joydan xavfsiz boshqaring',
+    'auth.google': 'Gmail bilan davom etish', 'auth.or': 'yoki',
+    'auth.signup': 'Hisob yaratish', 'auth.have': 'Hisobingiz bormi?', 'auth.signin': 'Kirish',
+    'access.title': 'Aqlli kirish', 'access.unlocked': 'Eshiklar ochiq',
+    'access.near': 'Telefon yaqinda aniqlandi', 'access.auto': 'Yaqinlashganda avto-ochish',
+    'access.autosub': '2 m ichida ochiladi', 'access.walk': 'Uzoqlashganda avto-qulflash',
+    'access.walksub': 'Ketganingizda qulflanadi', 'family.title': 'Oilaviy boshqaruv',
+    'family.shared': '3 kishi bilan bo\u2018lishilgan', 'family.members': "A'zolar",
+    'family.full': "To'liq kirish", 'family.owner': 'Egasi', 'family.drivesub': 'Haydash · qulf · iqlim',
+    'family.driver': 'Haydovchi', 'family.limsub': 'Joylashuv · faqat qulf', 'family.limited': 'Cheklangan',
+    'family.invite': 'Gmail orqali taklif qilish'
+  };
+
+  applyLang(lang) {
+    if (!this._orig) return;
+    this._orig.forEach((orig, el) => {
+      if (!el.isConnected) return;
+      const key = el.getAttribute('data-i18n');
+      el.textContent = lang === 'uz' && this.dict[key] ? this.dict[key] : orig;
+    });
+  }
+
+  renderVals() {
+    const lang = this.state.lang;
+    const pill = (on) => on
+      ? 'padding:5px 13px;border-radius:999px;background:linear-gradient(150deg,#FF8A2B,#FF4D00);color:#fff;'
+      : 'padding:5px 13px;border-radius:999px;color:#9a9ca2;';
+    return {
+      enPillStyle: pill(lang === 'en'),
+      uzPillStyle: pill(lang === 'uz'),
+      toggleLang: () => {
+        const next = this.state.lang === 'en' ? 'uz' : 'en';
+        this.setState({ lang: next });
+        this.applyLang(next);
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>
