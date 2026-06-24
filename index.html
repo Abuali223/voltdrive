@@ -193,6 +193,31 @@ body{
 #power-btn.off{background:radial-gradient(circle at 50% 35%,#222326,#17181b);box-shadow:0 0 0 8px rgba(255,255,255,.04),0 16px 36px -8px rgba(0,0,0,.6);color:#4a4c52;}
 #power-btn:hover{transform:scale(1.04);}
 .lucide{stroke-width:2;}
+/* ===== polish: screen transitions, tactile press, busy/success, toast ===== */
+.screen.active{animation:scrIn .34s cubic-bezier(.22,.61,.36,1);}
+@keyframes scrIn{from{opacity:0;transform:translateY(10px) scale(.992);}to{opacity:1;transform:none;}}
+/* tactile press feedback on interactive elements */
+.qbtn,.ibtn,.row,.ni,.obtn,.ctrl-btn,.gi,.map-chip,.seat-tab,.prow,.lpill,#power-btn{
+  transition:transform .14s cubic-bezier(.34,1.56,.64,1),background .15s,opacity .15s,box-shadow .25s,color .15s;}
+.qbtn:active,.ibtn:active,.obtn:active,.ctrl-btn:active,.map-chip:active,.seat-tab:active,#power-btn:active{transform:scale(.93);}
+.row:active,.gi:active,.prow:active,.ni:active{transform:scale(.97);}
+.tgl::after{transition:left .26s cubic-bezier(.34,1.56,.64,1);}
+/* command in-flight: dim + centered spinner */
+.vd-busy{position:relative;pointer-events:none;opacity:.72;}
+.vd-busy::after{content:"";position:absolute;top:50%;left:50%;width:18px;height:18px;margin:-9px 0 0 -9px;
+  border-radius:50%;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;animation:vdspin .6s linear infinite;}
+@keyframes vdspin{to{transform:rotate(360deg);}}
+/* success pop */
+.vd-ok{animation:vdpop .42s ease;}
+@keyframes vdpop{0%{transform:scale(1);}42%{transform:scale(1.15);}100%{transform:scale(1);}}
+/* toast accent by type */
+#vd-toast.ok{border-left:3px solid #2ecc71;}
+#vd-toast.err{border-left:3px solid #ff5252;}
+@media (prefers-reduced-motion: reduce){
+  .screen.active{animation:none;}
+  .qbtn,.ibtn,.row,.ni,.obtn,.ctrl-btn,.gi,.map-chip,.seat-tab,.prow,.lpill,#power-btn{transition:background .15s,color .15s;}
+  *:active{transform:none !important;}
+}
 </style>
 </head>
 <body>
@@ -253,7 +278,7 @@ body{
       </div>
       <div class="row" onclick="App.go('map')">
         <div class="chip"><i data-lucide="map-pin" style="width:17px;height:17px"></i></div>
-        <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:14px;" data-i18n="home.location">Location</div><div style="color:#7e8086;font-size:12px;margin-top:1px;" id="home-loc">87 rue Boston</div></div>
+        <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:14px;" data-i18n="home.location">Location</div><div style="color:#7e8086;font-size:12px;margin-top:1px;" id="home-loc" data-i18n="home.loc.wait">Locating…</div></div>
         <i data-lucide="chevron-right" style="width:18px;height:18px;color:#6a6c72"></i>
       </div>
       <div class="row" onclick="App.go('seat')">
@@ -538,7 +563,7 @@ body{
   </div>
   <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
     <div style="text-align:center;padding:8px 22px 0;">
-      <div style="color:#7e8086;font-size:12px;font-weight:500;" data-i18n="engine.hello" id="engine-hello">Hello Matias, welcome back</div>
+      <div style="color:#7e8086;font-size:12px;font-weight:500;" data-i18n="engine.hello" id="engine-hello">Welcome back</div>
       <div style="font-family:'Sora';font-weight:700;font-size:24px;color:#fff;letter-spacing:-.4px;margin-top:2px;" id="engine-car-name">Voyah Free</div>
     </div>
     <div style="width:84%;height:118px;margin:8px auto 0;border-radius:20px;overflow:hidden;background:#0a0b0c;"><img id="engine-car-img" src="project/cars/voyah.jpg" alt="Car" style="width:100%;height:100%;object-fit:cover;object-position:center 30%"></div>
@@ -587,7 +612,7 @@ body{
   <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
     <div style="display:flex;align-items:center;gap:14px;padding:16px 22px 0;">
       <div class="av org" style="width:62px;height:62px;font-size:20px;" id="profile-av">MK</div>
-      <div style="flex:1"><div style="font-family:'Sora';font-weight:700;font-size:18px;color:#fff;" id="profile-name">Matias Karimov</div><div style="color:#7e8086;font-size:12px;margin-top:2px;" id="profile-email">matias@voltdrive.com</div></div>
+      <div style="flex:1"><div style="font-family:'Sora';font-weight:700;font-size:18px;color:#fff;" id="profile-name">VoltDrive</div><div style="color:#7e8086;font-size:12px;margin-top:2px;" id="profile-email">—</div></div>
     </div>
     <div style="padding:0 22px;">
       <div class="gold-card">
@@ -705,7 +730,7 @@ body{
     <div style="padding:10px 22px 0;display:flex;flex-direction:column;gap:10px;">
       <div style="display:flex;align-items:center;gap:12px;">
         <div class="av org">MK</div>
-        <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:14px;">Matias K. <span style="color:#7e8086;font-weight:500;font-size:12px;" data-i18n="family.you">(you)</span></div><div style="color:#7e8086;font-size:11px;" data-i18n="family.full">Full access</div></div>
+        <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:14px;"><span id="family-self">You</span> <span style="color:#7e8086;font-weight:500;font-size:12px;" data-i18n="family.you">(you)</span></div><div style="color:#7e8086;font-size:11px;" data-i18n="family.full">Full access</div></div>
         <div class="badge org" data-i18n="family.owner">Owner</div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;">
@@ -746,7 +771,7 @@ const App = {
     'auth.have':'Hisobingiz bormi?','auth.signin':'Kirish',
     'home.range':'187 km masofa','home.control':'Boshqaruv','home.control.sub':'Maksimal nazorat',
     'home.climate':'Iqlim','home.climate.sub':'Salon 20°C','home.location':'Joylashuv',
-    'home.seat':'O\'rindiq sozlamasi','home.seat.sub':'Haydovchi · xotira',
+    'home.seat':'O\'rindiq sozlamasi','home.seat.sub':'Haydovchi · xotira','home.loc.wait':'Aniqlanmoqda…',
     'climate.title':'Iqlim','climate.optimal':'Optimal · 30%','climate.fan':'Ventilyator',
     'climate.heat':'Isitish','climate.seat':'O\'rindiq isitish','climate.defrost':'Tumanlash',
     'charge.title':'Mashina holati','charge.total':'Umumiy zaryad masofasi',
@@ -758,7 +783,7 @@ const App = {
     'seat.passenger':'YO\'LOVCHI','seat.rear':'ORQA',
     'garage.title':'Mening garajim','garage.sub':'3 ta mashina ulangan',
     'garage.search':'Mashina qidirish…','garage.active':'FAOL','garage.add':'Yangi mashina qo\'shish',
-    'engine.hello':'Salom Matias, xush kelibsiz','engine.range':'Masofa zaxirasi',
+    'engine.hello':'Xush kelibsiz','engine.range':'Masofa zaxirasi',
     'engine.tap':'Dvigatelni yoqish/o\'chirish','engine.locked':'Yopiq',
     'engine.trunk':'Bagaj','engine.lights':'Faralar','engine.horn':'Signal',
     'profile.title':'Profil','profile.premium':'To\'liq masofaviy boshqaruv · ustuvor yordam · 2026 dek. gacha',

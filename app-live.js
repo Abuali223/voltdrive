@@ -247,6 +247,7 @@ function showUser(user) {
   const name = user.displayName || email.split("@")[0] || "Foydalanuvchi";
   set("profile-name", name);
   set("profile-email", email);
+  set("family-self", name); // current user in the family list
   const av = document.getElementById("profile-av");
   if (av) av.textContent = (name[0] || "U").toUpperCase() + (name.split(/[ .]/)[1]?.[0] || "").toUpperCase();
   const row = document.getElementById("signout-row");
@@ -453,8 +454,28 @@ function wireControls() {
   };
 }
 
+// cmdFeedback maps an action to the control element to mark busy + the
+// success message shown on completion.
+function cmdFeedback(action) {
+  const uz = window.App?.lang === "uz";
+  const lock = () => document.getElementById("lock-btn");
+  const power = () => document.getElementById("power-btn");
+  const M = {
+    lock:    [lock,  uz ? "Qulflandi" : "Locked"],
+    unlock:  [lock,  uz ? "Ochildi" : "Unlocked"],
+    start:   [power, uz ? "Dvigatel yoqildi" : "Engine started"],
+    stop:    [power, uz ? "Dvigatel o‘chirildi" : "Engine stopped"],
+    climate: [() => null, uz ? "Iqlim yangilandi" : "Climate updated"],
+  };
+  const [getEl, msg] = M[action] || [() => null, uz ? "Bajarildi" : "Done"];
+  return { el: getEl(), msg };
+}
+
 async function sendCommand(action, body) {
   if (!CFG.apiBase || !auth?.currentUser) return; // demo mode: local only
+  const { el, msg } = cmdFeedback(action);
+  haptic(12);
+  if (el) el.classList.add("vd-busy");
   try {
     const token = await auth.currentUser.getIdToken();
     const vid = VMAP[App.activeCar?.id] || "voyah-001";
@@ -470,8 +491,15 @@ async function sendCommand(action, body) {
     // The backend returns the fresh snapshot — reflect it immediately.
     const snap = await res.json().catch(() => null);
     if (snap && snap.vehicleId) applyLive(snap);
+    toast(msg + " ✓", "ok");
+    haptic([10, 40, 12]);
+    if (el) { el.classList.add("vd-ok"); setTimeout(() => el.classList.remove("vd-ok"), 440); }
   } catch (e) {
-    toast(`Buyruq xatosi (${action}): ${e.message}`);
+    const uz = window.App?.lang === "uz";
+    toast((uz ? "Xato: " : "Failed: ") + action + " (" + e.message + ")", "err");
+    haptic([40, 30, 40]);
+  } finally {
+    if (el) el.classList.remove("vd-busy");
   }
 }
 
@@ -492,22 +520,33 @@ function setHTML(id, html) {
   if (el) el.innerHTML = html;
 }
 
-function toast(msg) {
+// toast shows a transient message. type: "ok" | "err" | undefined (neutral).
+function toast(msg, type) {
   let t = document.getElementById("vd-toast");
   if (!t) {
     t = document.createElement("div");
     t.id = "vd-toast";
     t.style.cssText =
-      "position:fixed;left:50%;bottom:28px;transform:translateX(-50%);" +
+      "position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(8px);" +
       "background:#1A1C22;color:#fff;padding:11px 18px;border-radius:12px;" +
       "font:500 13px/1.3 system-ui;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.4);" +
-      "max-width:80vw;text-align:center;opacity:0;transition:opacity .2s;";
+      "max-width:80vw;text-align:center;opacity:0;transition:opacity .2s,transform .25s cubic-bezier(.34,1.56,.64,1);";
     document.body.appendChild(t);
   }
+  t.className = type || "";
   t.textContent = msg;
   t.style.opacity = "1";
+  t.style.transform = "translateX(-50%) translateY(0)";
   clearTimeout(t._h);
-  t._h = setTimeout(() => (t.style.opacity = "0"), 2600);
+  t._h = setTimeout(() => {
+    t.style.opacity = "0";
+    t.style.transform = "translateX(-50%) translateY(8px)";
+  }, 2600);
+}
+
+// haptic fires a short vibration when the device supports it (no-op otherwise).
+function haptic(ms = 12) {
+  try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {}
 }
 
 // --- Pull-to-refresh (native app feel) ---
