@@ -739,12 +739,12 @@ body{
       <div style="width:62px;height:62px;border-radius:18px;background:linear-gradient(155deg,#26272b,#131418);border:1px solid rgba(255,122,46,.4);display:flex;align-items:center;justify-content:center;color:#FF8A3D;z-index:2;box-shadow:0 0 24px -4px rgba(255,90,0,.5);"><i data-lucide="car-front" style="width:26px;height:26px"></i></div>
       <div style="position:absolute;left:34px;top:64px;display:flex;flex-direction:column;align-items:center;gap:3px;z-index:2;">
         <div style="width:34px;height:34px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;color:#15161a;box-shadow:0 4px 12px rgba(0,0,0,.4);"><i data-lucide="smartphone" style="width:16px;height:16px"></i></div>
-        <span style="font-size:10px;font-weight:700;color:#FF8A3D;background:rgba(18,19,22,.85);padding:2px 6px;border-radius:8px;">2.0 m</span>
+        <span id="acc-dist" style="font-size:10px;font-weight:700;color:#FF8A3D;background:rgba(18,19,22,.85);padding:2px 6px;border-radius:8px;">— m</span>
       </div>
     </div>
-    <div style="margin:0 22px;padding:13px 16px;border-radius:18px;background:linear-gradient(120deg,rgba(55,214,122,.12),rgba(55,214,122,.04));border:1px solid rgba(55,214,122,.3);display:flex;align-items:center;gap:11px;">
-      <i data-lucide="lock-open" style="width:19px;height:19px;color:#43d684"></i>
-      <div style="flex:1"><div style="color:#fff;font-weight:700;font-size:13px;" data-i18n="access.unlocked">Doors unlocked</div><div style="color:#9a9ca2;font-size:11px;margin-top:1px;" data-i18n="access.near">Phone detected nearby</div></div>
+    <div id="acc-card" style="margin:0 22px;padding:13px 16px;border-radius:18px;background:linear-gradient(120deg,rgba(55,214,122,.12),rgba(55,214,122,.04));border:1px solid rgba(55,214,122,.3);display:flex;align-items:center;gap:11px;">
+      <i id="acc-icon" data-lucide="lock-open" style="width:19px;height:19px;color:#43d684"></i>
+      <div style="flex:1"><div id="acc-status" style="color:#fff;font-weight:700;font-size:13px;" data-i18n="access.unlocked">Doors unlocked</div><div id="acc-substatus" style="color:#9a9ca2;font-size:11px;margin-top:1px;" data-i18n="access.near">Phone detected nearby</div></div>
     </div>
     <div style="padding:14px 22px 0;display:flex;flex-direction:column;gap:9px;">
       <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">

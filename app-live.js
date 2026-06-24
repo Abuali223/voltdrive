@@ -86,6 +86,8 @@ function boot() {
           try { subscribe(); } catch (e) { console.warn("subscribe:", e); }
           // Security gate: ask for a PIN before entering (set up first time).
           await lockGate(user.uid);
+          // Winter convenience: offer a one-tap warm-up before entering.
+          await warmupPrompt();
           if (window.App) App.go("home");
         } else {
           hideUser();
@@ -783,7 +785,12 @@ function wireExtras() {
   // In-app map: initialise Leaflet whenever the Map screen opens.
   if (App.go) {
     const origGo = App.go.bind(App);
-    App.go = (s) => { origGo(s); if (s === "map") ensureMap(); };
+    App.go = (s) => {
+      origGo(s);
+      if (s === "map") ensureMap();
+      // Smart Access needs a live GPS fix to measure distance to the car.
+      if (s === "access") locateDevice(true);
+    };
   }
   if (App.current === "map") ensureMap();
 
@@ -818,6 +825,7 @@ function wireExtras() {
     });
   }
   wireSeat();
+  wireAccess();
 
   // Profile edit (pencil): change the display name.
   const pe = document.getElementById("profile-edit");
@@ -915,6 +923,7 @@ function locateDevice(force) {
     (p) => {
       locating = false;
       deviceLoc = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy || 0 };
+      geofenceTick(); // proximity auto lock/unlock
       if (carMarker) carMarker.setLatLng([deviceLoc.lat, deviceLoc.lng]);
       // GPS heading while moving (compass handles the stationary case).
       if (typeof p.coords.heading === "number" && !isNaN(p.coords.heading) && p.coords.speed > 0.5) {
@@ -1212,6 +1221,151 @@ function updateClimateUI() {
   }
   const pw = document.getElementById("climate-power");
   if (pw) pw.style.color = climateOn ? "#FF6A1A" : "";
+}
+
+// --- Proximity auto lock/unlock (geofence) ---
+//
+// While the app is open and a GPS fix is available, we measure the distance
+// between the phone and the car's last known location. Crossing the NEAR
+// threshold (approaching) auto-unlocks; crossing the FAR threshold (walking
+// away) auto-locks. Hysteresis (NEAR < FAR) prevents flapping at the edge.
+//
+// Limits to be honest about: this runs only while the PWA is open in the
+// foreground (browsers can't geofence reliably in the background — that needs
+// a native app), and phone GPS is accurate to ~10-20 m, so the radii are tens
+// of metres, not 2 m. The car reference point is its live telemetry location.
+
+const NEAR_M = 25; // within this → "arrived"
+const FAR_M = 70; // beyond this → "left"
+let geoNear = null; // null = unknown, true = near, false = far
+
+function distMeters(a, b) {
+  if (!a || !b) return Infinity;
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * toR, dLng = (b.lng - a.lng) * toR;
+  const la1 = a.lat * toR, la2 = b.lat * toR;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+function tglOn(id) {
+  const el = document.getElementById(id);
+  return !!el && el.classList.contains("on");
+}
+
+function geofenceTick() {
+  if (!window.App || !deviceLoc || !lastLoc) return;
+  const d = distMeters(deviceLoc, lastLoc);
+  updateAccessUI(d);
+
+  // Determine near/far with hysteresis.
+  let near = geoNear;
+  if (d <= NEAR_M) near = true;
+  else if (d >= FAR_M) near = false;
+  if (near === geoNear) return; // no state change (or inside the dead band)
+  const first = geoNear === null;
+  geoNear = near;
+  if (first) return; // don't fire a command on the very first reading
+
+  const uz = App.lang === "uz";
+  if (near && tglOn("auto-unlock-tgl") && App.locked) {
+    sendCommand("unlock");
+    toast(uz ? "Yaqinlashdingiz — eshik ochildi ✓" : "Approached — unlocked ✓", "ok");
+  } else if (!near && tglOn("walk-lock-tgl") && !App.locked) {
+    sendCommand("lock");
+    toast(uz ? "Uzoqlashdingiz — qulflandi ✓" : "Walked away — locked ✓", "ok");
+  }
+}
+
+function updateAccessUI(d) {
+  const uz = window.App?.lang === "uz";
+  set("acc-dist", d < 1000 ? Math.round(d) + " m" : (d / 1000).toFixed(1) + " km");
+  const near = d <= NEAR_M;
+  const card = document.getElementById("acc-card");
+  const icon = document.getElementById("acc-icon");
+  const status = document.getElementById("acc-status");
+  const sub = document.getElementById("acc-substatus");
+  if (status) { status.textContent = near ? (uz ? "Mashina yaqin" : "Car is nearby") : (uz ? "Mashina uzoqda" : "Car is far"); status.removeAttribute("data-i18n"); }
+  if (sub) { sub.textContent = (uz ? "Masofa · " : "Distance · ") + (d < 1000 ? Math.round(d) + " m" : (d / 1000).toFixed(1) + " km"); sub.removeAttribute("data-i18n"); }
+  if (icon) icon.setAttribute("data-lucide", near ? "lock-open" : "lock");
+  if (card) {
+    const g = "linear-gradient(120deg,rgba(55,214,122,.12),rgba(55,214,122,.04))";
+    const o = "linear-gradient(120deg,rgba(255,106,26,.12),rgba(255,106,26,.04))";
+    card.style.background = near ? g : o;
+    card.style.borderColor = near ? "rgba(55,214,122,.3)" : "rgba(255,122,46,.3)";
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+// wireAccess persists the two toggles and starts a GPS watch while either is on.
+function wireAccess() {
+  ["auto-unlock-tgl", "walk-lock-tgl"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const saved = localStorage.getItem("vd_" + id);
+    if (saved !== null) {
+      const on = saved === "1";
+      el.classList.toggle("on", on);
+      el.classList.toggle("off", !on);
+    }
+    el.addEventListener("click", () => {
+      // runs after the inline class toggle; read + persist the final state
+      setTimeout(() => {
+        localStorage.setItem("vd_" + id, el.classList.contains("on") ? "1" : "0");
+        if (tglOn("auto-unlock-tgl") || tglOn("walk-lock-tgl")) locateDevice(true);
+      }, 0);
+    });
+  });
+  // If a toggle is already on at startup, begin tracking so it works from home.
+  if (tglOn("auto-unlock-tgl") || tglOn("walk-lock-tgl")) {
+    setTimeout(() => { try { locateDevice(true); } catch (e) {} }, 1500);
+  }
+}
+
+// --- Warm-up prompt (shown right after the PIN unlock) ---
+//
+// Winter convenience: one tap to remote-start the car and turn the heater on
+// so it warms up before you leave. Skippable; never blocks entry to the app.
+
+function warmupPrompt() {
+  return new Promise((resolve) => {
+    if (!CFG.apiBase) { resolve(); return; } // demo mode: nothing to start
+    const uz = window.App?.lang === "uz";
+    const o = document.createElement("div");
+    o.id = "vd-warmup";
+    o.style.cssText =
+      "position:fixed;inset:0;z-index:10001;background:radial-gradient(120% 80% at 50% -10%,#26272b 0%,#141518 55%,#0b0c0e 100%);" +
+      "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:34px;font-family:'Manrope',system-ui;" +
+      "animation:scrIn .3s ease;";
+    o.innerHTML =
+      '<div style="font-family:\'Sora\';font-weight:800;font-size:22px;color:#fff;text-align:center;">' +
+      (uz ? "Yo‘lga tayyormisiz?" : "Ready to go?") + "</div>" +
+      '<div style="color:#9a9ca2;font-size:13px;text-align:center;max-width:240px;line-height:1.45;">' +
+      (uz ? "Chiqishdan oldin mashinani qizdirib oling — bir bosishda dvigatel va isitish yoqiladi." :
+            "Warm the car up before you leave — one tap starts the engine and heater.") + "</div>" +
+      '<div id="vd-warmup-btn" style="width:128px;height:128px;border-radius:50%;margin-top:6px;cursor:pointer;' +
+      'background:radial-gradient(circle at 50% 35%,#FF8A2B,#FF4D00);box-shadow:0 0 0 10px rgba(255,90,0,.12),0 18px 40px -8px rgba(255,90,0,.7);' +
+      'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#fff;">' +
+      '<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>' +
+      '<span id="vd-warmup-lbl" style="font-family:\'Sora\';font-weight:700;font-size:12px;">' + (uz ? "Qizdirish" : "Warm up") + "</span></div>" +
+      '<div id="vd-warmup-skip" style="color:#9a9ca2;font-size:14px;font-weight:700;cursor:pointer;margin-top:10px;">' +
+      (uz ? "Keyinroq" : "Skip") + "</div>";
+    document.body.appendChild(o);
+
+    let done = false;
+    const finish = () => { if (done) return; done = true; o.remove(); resolve(); };
+    o.querySelector("#vd-warmup-skip").addEventListener("click", finish);
+    o.querySelector("#vd-warmup-btn").addEventListener("click", () => {
+      haptic([12, 40, 12]);
+      sendCommand("start");
+      sendCommand("climate", { on: true, targetC: 24 });
+      const lbl = o.querySelector("#vd-warmup-lbl");
+      if (lbl) lbl.textContent = uz ? "Qizdirilmoqda…" : "Warming…";
+      setTimeout(finish, 1400);
+    });
+    // Auto-dismiss if the user just ignores it.
+    setTimeout(finish, 12000);
+  });
 }
 
 // --- PIN lock (security gate on every app open) ---
