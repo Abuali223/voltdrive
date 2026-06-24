@@ -23,7 +23,11 @@
       "go.sum",
       "Dockerfile",
       "google-services.json",
-      "rtdb-seed.example.json"
+      "rtdb-seed.example.json",
+      "test/**",
+      "vitest.config.js",
+      "package.json",
+      "package-lock.json"
     ],
     "rewrites": [
       {
@@ -46,6 +50,12 @@
       },
       {
         "source": "/@(app-live.js|voltdrive.config.js|manifest.webmanifest)",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/lib/voltdrive-core.js",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
         ]

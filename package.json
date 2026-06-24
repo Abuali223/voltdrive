@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "scripts": {
     "deploy": "firebase deploy --only hosting",
-    "serve": "firebase serve --only hosting"
+    "serve": "firebase serve --only hosting",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "firebase-tools": "^13.0.0"
+    "firebase-tools": "^13.0.0",
+    "vitest": "^2.1.9"
   }
 }
