@@ -527,10 +527,11 @@ function toast(msg, type) {
     t = document.createElement("div");
     t.id = "vd-toast";
     t.style.cssText =
-      "position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(8px);" +
+      "position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(8px);" +
       "background:#1A1C22;color:#fff;padding:11px 18px;border-radius:12px;" +
       "font:500 13px/1.3 system-ui;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.4);" +
-      "max-width:80vw;text-align:center;opacity:0;transition:opacity .2s,transform .25s cubic-bezier(.34,1.56,.64,1);";
+      "max-width:80vw;text-align:center;opacity:0;pointer-events:none;" +
+      "transition:opacity .2s,transform .25s cubic-bezier(.34,1.56,.64,1);";
     document.body.appendChild(t);
   }
   t.className = type || "";
