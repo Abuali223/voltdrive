@@ -350,10 +350,20 @@ const RU_MSG = {
   "Car is nearby": "Автомобиль рядом",
   "Car is far": "Автомобиль далеко",
   "API offline": "API офлайн",
+  "Range unknown": "Запас хода неизвестен",
+  "Off": "Выкл",
   // Hardcoded Uzbek sources:
   "Chiqdingiz": "Вы вышли",
   "Ilova o'rnatildi ✓": "Приложение установлено ✓",
 };
+// Patterns for interpolated messages (range calculator, schedule, etc.).
+const RU_PATTERN = [
+  [/^✓ Reachable · ~(\d+) km left$/, "✓ Хватит · ~$1 км в запасе"],
+  [/^⚠️ Tight · only ~(-?\d+) km spare$/, "⚠️ Впритык · всего ~$1 км запаса"],
+  [/^✕ Won't reach · ~(\d+) km short$/, "✕ Не хватит · ~$1 км не достаёт"],
+  [/^Saved · daily (\d{2}:\d{2})$/, "Сохранено · ежедневно в $1"],
+  [/^Daily (\d{2}:\d{2})$/, "Ежедневно $1"],
+];
 // Prefixes for "label + dynamic value" messages.
 const RU_PREFIX = {
   "Added: ": "Добавлено: ",
@@ -370,6 +380,9 @@ function ruMsg(msg) {
   if (RU_MSG[msg]) return RU_MSG[msg];
   for (const p in RU_PREFIX) {
     if (msg.startsWith(p)) return RU_PREFIX[p] + msg.slice(p.length);
+  }
+  for (const [re, rep] of RU_PATTERN) {
+    if (re.test(msg)) return msg.replace(re, rep);
   }
   return msg; // unknown → leave as-is
 }
@@ -1261,7 +1274,7 @@ function showReach(km) {
   const uz = window.App?.lang === "uz";
   const el = document.getElementById("map-stations");
   if (!lastRangeKm) {
-    if (el) { el.textContent = uz ? "Zaryad ma'lumoti yo'q" : "Range unknown"; el.removeAttribute("data-i18n"); }
+    if (el) { el.textContent = ruMsg(uz ? "Zaryad ma'lumoti yo'q" : "Range unknown"); el.removeAttribute("data-i18n"); }
     return;
   }
   const after = Math.round(lastRangeKm - km);
@@ -1272,7 +1285,7 @@ function showReach(km) {
         ? (uz ? `⚠️ Zo'rg'a yetadi · faqat ~${after} km qoladi` : `⚠️ Tight · only ~${after} km spare`)
         : (uz ? `✕ Yetmaydi · ~${Math.abs(after)} km kam` : `✕ Won't reach · ~${Math.abs(after)} km short`));
   if (el) {
-    el.textContent = msg;
+    el.textContent = ruMsg(msg);
     el.removeAttribute("data-i18n");
     el.style.color = ok ? "#43d684" : (lastRangeKm >= km ? "#FF8A3D" : "#ff5252");
   }
@@ -1807,9 +1820,9 @@ function updateScheduleSub(sc) {
   const el = document.getElementById("home-schedule-sub");
   if (!el) return;
   el.removeAttribute("data-i18n");
-  el.textContent = sc.enabled
+  el.textContent = ruMsg(sc.enabled
     ? (uz ? `Har kuni ${String(sc.hour).padStart(2, "0")}:${String(sc.minute).padStart(2, "0")}` : `Daily ${String(sc.hour).padStart(2, "0")}:${String(sc.minute).padStart(2, "0")}`)
-    : (uz ? "O‘chiq" : "Off");
+    : (uz ? "O‘chiq" : "Off"));
 }
 
 // --- Shared modal shell ---
