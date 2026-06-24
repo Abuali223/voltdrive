@@ -28,7 +28,7 @@ import {
 
 const CFG = window.VOLTDRIVE_CONFIG || {};
 // Map the UI car ids to backend / RTDB vehicle ids.
-const VMAP = { voyah: "voyah-001", deepal: "deepal-002", dongfeng: "dongfeng-003" };
+const VMAP = { voyah: "voyah-001", deepal: "deepal-002", dongfeng: "dongfeng-003", byd: "byd-004" };
 
 // Current language helper.
 const uzNow = () => window.App?.lang === "uz";
@@ -475,6 +475,9 @@ function wireControls() {
     origEngine();
     sendCommand(App.engineOn ? "start" : "stop");
   };
+
+  // Security & PIN (profile row) → change the 4-digit PIN.
+  App.changePin = changePin;
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
   const origLights = App.toggleLights.bind(App);
@@ -1416,6 +1419,24 @@ function warmupPrompt() {
     // Auto-enter only if the screen is completely untouched.
     idleT = setTimeout(finish, 15000);
   });
+}
+
+// changePin re-runs the PIN setup so the user can set a new 4-digit PIN.
+// Wired to the profile "Security & PIN" row.
+function changePin() {
+  const uz = window.App?.lang === "uz";
+  const u = auth?.currentUser;
+  if (!u) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  buildLockOverlay();
+  lockState = {
+    uid: u.uid,
+    key: "vd_pin_" + u.uid,
+    resolve: (ok) => { if (ok) toast(uz ? "PIN yangilandi ✓" : "PIN updated ✓", "ok"); },
+    mode: "setup", stage: "first", first: "", entry: "",
+  };
+  setLockTitle(uz ? "Yangi PIN yarating" : "Create a new PIN");
+  updateDots();
+  showLock();
 }
 
 // --- PIN lock (security gate on every app open) ---

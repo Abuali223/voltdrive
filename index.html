@@ -584,22 +584,22 @@ body{
   </div>
   <div style="flex:1;overflow-y:auto;padding:16px 22px 90px;">
     <div class="srch"><i data-lucide="search" style="width:16px;height:16px"></i><span data-i18n="garage.search">Search vehicle…</span></div>
-    <div class="gi ac" onclick="App.selectCar(this,'voyah','Voyah Free','project/cars/voyah.jpg','center 32%','187 km')">
+    <div class="gi ac" data-brand="voyah" onclick="App.selectCar(this,'voyah','Voyah Free','project/cars/voyah.jpg','center 32%','187 km')">
       <div style="position:absolute;top:12px;right:14px;display:flex;align-items:center;gap:5px;color:#FF8A3D;font-size:11px;font-weight:700;"><span style="width:7px;height:7px;border-radius:50%;background:#37d67a;box-shadow:0 0 8px #37d67a"></span><span data-i18n="garage.active">ACTIVE</span></div>
       <div class="gi-img"><img src="project/cars/voyah.jpg" alt="Voyah" style="object-position:center 32%"></div>
       <div style="flex:1"><div style="color:#fff;font-weight:700;font-size:15px;font-family:'Sora';">Voyah Free</div><div style="color:#9a9ca2;font-size:12px;margin-top:3px;display:flex;gap:10px;"><span>187 km</span><span>·</span><span>80%</span></div></div>
     </div>
-    <div class="gi" onclick="App.selectCar(this,'deepal','Deepal S07','project/cars/deepal-s7.png','center 50%','205 km')">
+    <div class="gi" data-brand="deepal" onclick="App.selectCar(this,'deepal','Deepal S07','project/cars/deepal-s7.png','center 50%','205 km')">
       <div class="gi-img"><img src="project/cars/deepal-s7.png" alt="Deepal" style="object-position:center 50%;object-fit:contain"></div>
       <div style="flex:1"><div style="color:#fff;font-weight:700;font-size:15px;font-family:'Sora';">Deepal S07</div><div style="color:#9a9ca2;font-size:12px;margin-top:3px;display:flex;gap:10px;"><span>205 km</span><span>·</span><span>62%</span></div></div>
       <i data-lucide="chevron-right" style="width:18px;height:18px;color:#6a6c72"></i>
     </div>
-    <div class="gi" onclick="App.selectCar(this,'dongfeng','Dongfeng AX7','project/cars/dongfeng.jpg','center 38%','320 km')">
+    <div class="gi" data-brand="dongfeng" onclick="App.selectCar(this,'dongfeng','Dongfeng AX7','project/cars/dongfeng.jpg','center 38%','320 km')">
       <div class="gi-img"><img src="project/cars/dongfeng.jpg" alt="Dongfeng" style="object-position:center 38%"></div>
       <div style="flex:1"><div style="color:#fff;font-weight:700;font-size:15px;font-family:'Sora';">Dongfeng AX7</div><div style="color:#9a9ca2;font-size:12px;margin-top:3px;display:flex;gap:10px;"><span>320 km</span><span>·</span><span>54%</span></div></div>
       <i data-lucide="chevron-right" style="width:18px;height:18px;color:#6a6c72"></i>
     </div>
-    <div class="dash"><i data-lucide="plus-circle" style="width:17px;height:17px;color:#FF7A2E"></i><span data-i18n="garage.add">Add new vehicle</span></div>
+    <div class="dash" id="garage-add" onclick="App.addVehicle()"><i data-lucide="plus-circle" style="width:17px;height:17px;color:#FF7A2E"></i><span data-i18n="garage.add">Add new vehicle</span></div>
   </div>
   <div class="bnav">
     <div class="ni" onclick="App.go('home')"><i data-lucide="layout-grid" style="width:22px;height:22px"></i></div>
@@ -682,7 +682,7 @@ body{
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.vehicles">My vehicles</div>
         <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
       </div>
-      <div class="prow" onclick="App.go('access')">
+      <div class="prow" onclick="App.changePin()">
         <div class="chip sm neu"><i data-lucide="shield-check" style="width:16px;height:16px"></i></div>
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.security">Security &amp; PIN</div>
         <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
@@ -690,11 +690,6 @@ body{
       <div class="prow" onclick="App.go('family')">
         <div class="chip sm neu"><i data-lucide="users" style="width:16px;height:16px"></i></div>
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.family">Family sharing</div>
-        <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
-      </div>
-      <div class="prow" onclick="App.go('seat')">
-        <div class="chip sm neu"><i data-lucide="armchair" style="width:16px;height:16px"></i></div>
-        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.seat">Seat adjustment</div>
         <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
       </div>
       <div class="prow">
@@ -749,7 +744,7 @@ body{
     <div style="padding:14px 22px 0;display:flex;flex-direction:column;gap:9px;">
       <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
         <div class="chip sm" style="background:rgba(255,106,26,.16)"><i data-lucide="radar" style="width:15px;height:15px"></i></div>
-        <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:13px;" data-i18n="access.auto">Auto-unlock on approach</div><div style="color:#7e8086;font-size:11px;" data-i18n="access.autosub">Unlocks within 2 m</div></div>
+        <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:13px;" data-i18n="access.auto">Auto-unlock on approach</div><div style="color:#7e8086;font-size:11px;" data-i18n="access.autosub">Unlocks when you’re near</div></div>
         <div class="tgl on" id="auto-unlock-tgl" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
       </div>
       <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
@@ -850,7 +845,7 @@ const App = {
     'profile.notif':'Bildirishnomalar','profile.lang':'Til','profile.signout':'Chiqish',
     'access.title':'Aqlli kirish','access.unlocked':'Eshiklar ochiq',
     'access.near':'Telefon yaqinda aniqlandi','access.auto':'Yaqinlashganda avto-ochish',
-    'access.autosub':'2 m ichida ochiladi','access.walk':'Uzoqlashganda avto-qulflash',
+    'access.autosub':'Yaqinlashganda ochiladi','access.walk':'Uzoqlashganda avto-qulflash',
     'access.walksub':'Ketganingizda qulflanadi',
     'family.title':'Oilaviy boshqaruv','family.shared':'3 kishi bilan bo\'lishilgan',
     'family.members':'A\'zolar','family.you':'(siz)','family.full':'To\'liq kirish',
@@ -933,15 +928,21 @@ const App = {
 
   selectCar(el, id, name, img, pos, range) {
     this.activeCar = { id, name, img, pos, range };
-    const isPng = img.endsWith('.png'); // transparent render → premium contain + shadow
+    const isPng = !!img && img.endsWith('.png'); // transparent render → premium contain + shadow
     const homeImg = document.getElementById('home-car-img');
-    if (homeImg) { homeImg.src = img; homeImg.style.objectPosition = pos; homeImg.classList.toggle('png', isPng); }
+    if (homeImg) {
+      if (img) { homeImg.src = img; homeImg.style.objectPosition = pos; homeImg.style.display = ''; homeImg.classList.toggle('png', isPng); }
+      else { homeImg.removeAttribute('src'); homeImg.style.display = 'none'; } // no photo → premium gradient stage only
+    }
     const homeName = document.getElementById('home-car-name');
     if (homeName) homeName.textContent = name;
     const homeRange = document.getElementById('home-range');
     if (homeRange) { homeRange.textContent = range + (this.lang === 'uz' ? ' masofa' : ' range'); homeRange.removeAttribute('data-i18n'); }
     const engineImg = document.getElementById('engine-car-img');
-    if (engineImg) { engineImg.src = img; engineImg.style.objectPosition = pos; engineImg.style.objectFit = isPng ? 'contain' : 'cover'; }
+    if (engineImg) {
+      if (img) { engineImg.src = img; engineImg.style.objectPosition = pos; engineImg.style.objectFit = isPng ? 'contain' : 'cover'; engineImg.style.display = ''; }
+      else { engineImg.removeAttribute('src'); engineImg.style.display = 'none'; }
+    }
     const engineName = document.getElementById('engine-car-name');
     if (engineName) engineName.textContent = name;
     const engineRange = document.getElementById('engine-range');
@@ -949,6 +950,81 @@ const App = {
     document.querySelectorAll('.gi').forEach(g => g.classList.remove('ac'));
     if (el) el.classList.add('ac');
     this.go('home');
+  },
+
+  // Base no-op; app-live.js replaces this with the real PIN-change flow in
+  // live mode (so the profile "Security & PIN" row works).
+  changePin() {},
+
+  // Add a vehicle to the garage. Lists supported, backend-seeded cars that
+  // aren't in the garage yet (e.g. BYD). New brands beyond these need their
+  // official API before they can be paired.
+  addVehicle() {
+    const uz = this.lang === 'uz';
+    const CATALOG = [
+      { brand: 'byd', name: 'BYD Han', img: '', pos: 'center 40%', range: '210 km', batt: '70' },
+    ];
+    const have = new Set([...document.querySelectorAll('#s-garage .gi')].map(g => g.dataset.brand || ''));
+    const addable = CATALOG.filter(c => !have.has(c.brand));
+
+    const o = document.createElement('div');
+    o.style.cssText = 'position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;';
+    const close = () => o.remove();
+    o.addEventListener('click', e => { if (e.target === o) close(); });
+
+    const carSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>';
+
+    let rows;
+    if (addable.length === 0) {
+      rows = '<div style="color:#9a9ca2;font-size:13px;line-height:1.5;text-align:center;padding:6px 0 10px;">' +
+        (uz ? "Barcha mavjud mashinalar qo‘shilgan. Yangi brendlar rasmiy API ulangach paydo bo‘ladi."
+            : "All available vehicles are added. New brands appear once their official API is connected.") + '</div>';
+    } else {
+      rows = addable.map(c =>
+        '<div class="vd-add-opt" data-brand="' + c.brand + '" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);cursor:pointer;margin-bottom:9px;">' +
+        '<div style="width:46px;height:34px;border-radius:9px;background:linear-gradient(150deg,#2a2c31,#15161a);display:flex;align-items:center;justify-content:center;color:#FF8A3D;">' + carSvg + '</div>' +
+        '<div style="flex:1"><div style="color:#fff;font-weight:700;font-size:14px;font-family:\'Sora\';">' + c.name + '</div><div style="color:#9a9ca2;font-size:12px;">' + c.range + ' · ' + c.batt + '%</div></div>' +
+        '<div style="color:#FF7A2E;">+</div></div>').join('');
+    }
+
+    const box = document.createElement('div');
+    box.style.cssText = "width:100%;max-width:330px;background:#16171a;border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:20px;font-family:'Manrope',system-ui;animation:scrIn .26s ease;";
+    box.innerHTML =
+      '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:14px;">' +
+      (uz ? 'Mashina qo‘shish' : 'Add vehicle') + '</div>' + rows +
+      '<div id="vd-add-close" style="margin-top:6px;text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:9px;">' +
+      (uz ? 'Yopish' : 'Close') + '</div>';
+    o.appendChild(box);
+    document.body.appendChild(o);
+
+    box.querySelector('#vd-add-close').addEventListener('click', close);
+    box.querySelectorAll('.vd-add-opt').forEach(el => {
+      el.addEventListener('click', () => {
+        const c = CATALOG.find(x => x.brand === el.dataset.brand);
+        this._appendGarageCar(c);
+        close();
+      });
+    });
+  },
+
+  _appendGarageCar(c) {
+    const addBtn = document.getElementById('garage-add');
+    if (!addBtn) return;
+    const card = document.createElement('div');
+    card.className = 'gi';
+    card.dataset.brand = c.brand;
+    const carSvg = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FF8A3D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>';
+    const imgHtml = c.img
+      ? '<div class="gi-img"><img src="' + c.img + '" alt="' + c.name + '" style="object-position:' + c.pos + '"></div>'
+      : '<div class="gi-img" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#2a2c31,#15161a);">' + carSvg + '</div>';
+    card.innerHTML = imgHtml +
+      '<div style="flex:1"><div style="color:#fff;font-weight:700;font-size:15px;font-family:\'Sora\';">' + c.name + '</div>' +
+      '<div style="color:#9a9ca2;font-size:12px;margin-top:3px;display:flex;gap:10px;"><span>' + c.range + '</span><span>·</span><span>' + c.batt + '%</span></div></div>' +
+      '<i data-lucide="chevron-right" style="width:18px;height:18px;color:#6a6c72"></i>';
+    card.addEventListener('click', () => this.selectCar(card, c.brand, c.name, c.img, c.pos, c.range));
+    addBtn.parentNode.insertBefore(card, addBtn);
+    lucide.createIcons();
+    this.selectCar(card, c.brand, c.name, c.img, c.pos, c.range);
   },
 
   toggleEngine() {
