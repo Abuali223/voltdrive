@@ -12,6 +12,7 @@ import {
   browserLocalPersistence,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
@@ -127,6 +128,7 @@ function wireAuthScreen() {
   const googleBtn = document.getElementById("google-btn");
   const toggle = document.getElementById("auth-toggle");
   const toggleText = document.getElementById("auth-toggle-text");
+  const forgotEl = document.getElementById("auth-forgot");
   const titleEl = document.getElementById("auth-title");
   const subEl = document.getElementById("auth-sub");
 
@@ -154,6 +156,10 @@ function wireAuthScreen() {
     if (toggle) toggle.textContent = t.tog;
     if (pw2Field) pw2Field.style.display = m === "signup" ? "flex" : "none";
     if (pw2El) pw2El.value = "";
+    if (forgotEl) {
+      forgotEl.style.display = m === "signin" ? "block" : "none";
+      forgotEl.textContent = uz() ? "Parolni unutdingizmi?" : "Forgot password?";
+    }
     authStatus("");
   }
 
@@ -208,6 +214,21 @@ function wireAuthScreen() {
   if (submitBtn) {
     submitBtn.removeAttribute("onclick");
     submitBtn.addEventListener("click", submit);
+  }
+
+  // Forgot password → send a Firebase reset email to the typed address.
+  if (forgotEl) {
+    forgotEl.addEventListener("click", async () => {
+      const email = (emailEl?.value || "").trim();
+      if (!email) return authStatus(uz() ? "Avval emailni kiriting" : "Enter your email first", true);
+      authStatus(uz() ? "Yuborilmoqda…" : "Sending…");
+      try {
+        await sendPasswordResetEmail(auth, email);
+        authStatus(uz() ? "Tiklash havolasi emailga yuborildi ✓" : "Reset link sent to your email ✓");
+      } catch (e) {
+        authStatus(explain(e), true);
+      }
+    });
   }
   // Enter key submits.
   [pwEl, pw2El, emailEl].forEach((el) =>
@@ -2133,13 +2154,21 @@ function changePin() {
   buildLockOverlay();
   const bioBtn = document.getElementById("vd-lock-bio");
   if (bioBtn) bioBtn.style.display = "none"; // no biometrics during PIN setup
+  const key = "vd_pin_" + u.uid;
+  const hasPin = !!localStorage.getItem(key);
   lockState = {
     uid: u.uid,
-    key: "vd_pin_" + u.uid,
+    key,
     resolve: (ok) => { if (ok) toast(uz ? "PIN yangilandi ✓" : "PIN updated ✓", "ok"); },
-    mode: "setup", stage: "first", first: "", entry: "",
+    fromProfile: true, // cancelling here returns to the app, never signs out
+    // When a PIN already exists, require the current one before allowing a change.
+    mode: hasPin ? "change" : "setup",
+    stage: hasPin ? "verify" : "first",
+    first: "", entry: "",
   };
-  setLockTitle(uz ? "Yangi PIN yarating" : "Create a new PIN");
+  setLockTitle(hasPin ? (uz ? "Joriy PIN ni kiriting" : "Enter current PIN")
+                      : (uz ? "Yangi PIN yarating" : "Create a new PIN"));
+  setLockOut(uz ? "Bekor qilish" : "Cancel");
   updateDots();
   showLock();
 }
@@ -2278,6 +2307,7 @@ function lockGate(uid) {
     };
     setLockTitle(stored ? (uz ? "PIN kodni kiriting" : "Enter your PIN")
                         : (uz ? "Yangi PIN yarating" : "Create a 4-digit PIN"));
+    setLockOut(uz ? "Boshqa akkaunt / Chiqish" : "Use another account / Sign out");
     updateDots();
     showLock();
     maybeOfferBio(uid, !!stored);
@@ -2324,8 +2354,16 @@ function buildLockOverlay() {
   // Biometric unlock button.
   o.querySelector("#vd-lock-bio").addEventListener("click", tryBioUnlock);
 
-  // Sign out from lock screen.
+  // Bottom action: from the profile PIN-change flow it just cancels (stays
+  // signed in); from the launch lock gate it signs out / switches account.
   o.querySelector("#vd-lock-out").addEventListener("click", async () => {
+    if (lockState?.fromProfile) {
+      hideLock();
+      const r = lockState.resolve;
+      lockState = null;
+      if (r) r(false);
+      return;
+    }
     try { if (unsubscribe) { unsubscribe(); unsubscribe = null; } await signOut(auth); } catch (_) {}
     hideLock();
     if (lockState?.resolve) lockState.resolve(false);
@@ -2341,6 +2379,11 @@ function buildLockOverlay() {
 
 function setLockTitle(t) {
   const el = document.getElementById("vd-lock-title");
+  if (el) el.textContent = t;
+}
+
+function setLockOut(t) {
+  const el = document.getElementById("vd-lock-out");
   if (el) el.textContent = t;
 }
 
@@ -2373,6 +2416,24 @@ async function onPinKey(k) {
 
   // 4 digits entered — process.
   const pin = lockState.entry;
+  if (lockState.mode === "change") {
+    // Verify the current PIN before allowing a new one to be set.
+    const ok = (await sha256(lockState.uid + ":" + pin)) === localStorage.getItem(lockState.key);
+    if (ok) {
+      lockState.mode = "setup";
+      lockState.stage = "first";
+      lockState.first = "";
+      lockState.entry = "";
+      setLockTitle(uz ? "Yangi PIN yarating" : "Create a new PIN");
+      updateDots();
+    } else {
+      shakeLock();
+      lockState.entry = "";
+      setLockTitle(uz ? "Noto'g'ri PIN" : "Wrong PIN");
+      updateDots();
+    }
+    return;
+  }
   if (lockState.mode === "setup") {
     if (lockState.stage === "first") {
       lockState.first = pin;
