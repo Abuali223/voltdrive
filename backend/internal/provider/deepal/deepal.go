@@ -1,31 +1,46 @@
-// Package deepal implements provider.VehicleProvider for Deepal (Changan's EV
-// brand). Works today via the embedded simulator; the real Changan/Deepal
-// cloud API drops in by replacing each a.sim.X(...) call with an HTTP request.
+// Package deepal implements provider.VehicleProvider for Deepal (Changan's EV brand).
+//
+// It serves the simulator until real credentials are configured, then switches
+// to the live OEM cloud API via the generic oemrest client (adjust oemrest's
+// paths + field tags to the official deepal API spec).
 package deepal
 
 import (
 	"context"
-	"net/http"
-	"time"
 
 	"voltdrive/backend/internal/provider"
+	"voltdrive/backend/internal/provider/oemrest"
 	"voltdrive/backend/internal/provider/sim"
 )
 
-// Config holds the Deepal cloud API settings (from Secret Manager).
+// Config holds the deepal cloud API settings (from Secret Manager).
 type Config struct {
 	BaseURL     string
 	TokenSource func(ctx context.Context) (string, error)
 }
 
-// Adapter talks to Deepal. Simulator-backed until the real API is wired.
-type Adapter struct {
-	cfg    Config
-	client *http.Client
-	sim    *sim.Engine
+// backend is the method set both the simulator and the live REST client share.
+type backend interface {
+	Snapshot(ctx context.Context, id string) (provider.Snapshot, error)
+	Lock(ctx context.Context, id string) error
+	Unlock(ctx context.Context, id string) error
+	RemoteStart(ctx context.Context, id string) error
+	RemoteStop(ctx context.Context, id string) error
+	SetClimate(ctx context.Context, id string, on bool, targetC float64) error
+	SetLights(ctx context.Context, id string, on bool) error
+	SetTrunk(ctx context.Context, id string, open bool) error
+	Honk(ctx context.Context, id string) error
+	SetSeat(ctx context.Context, id string, seat provider.SeatCmd) error
 }
 
-// New returns a working Deepal adapter.
+// Adapter serves the simulator until real credentials switch it to the live API.
+type Adapter struct {
+	sim  *sim.Engine
+	rest *oemrest.Client
+}
+
+// New returns a working deepal adapter. With cfg.BaseURL set it talks to the
+// real cloud API; otherwise it runs the simulator.
 func New(cfg Config) *Adapter {
 	seed := []provider.Snapshot{{
 		VehicleID: "deepal-002", Name: "Deepal S07", Online: true,
@@ -35,34 +50,41 @@ func New(cfg Config) *Adapter {
 		Location: provider.Location{Lat: 40.7835, Lng: 72.346, Heading: 180},
 		Health:   provider.Health{OdometerKm: 8120, TirePressures: [4]int{232, 231, 230, 230}, ServiceDueKm: 6800},
 	}}
-	return &Adapter{cfg: cfg, client: &http.Client{Timeout: 20 * time.Second}, sim: sim.New("deepal", seed)}
+	a := &Adapter{sim: sim.New("deepal", seed)}
+	if cfg.BaseURL != "" && cfg.TokenSource != nil {
+		a.rest = oemrest.New(cfg.BaseURL, cfg.TokenSource)
+	}
+	return a
 }
 
 func (a *Adapter) Brand() string { return "deepal" }
-func (a *Adapter) live() bool    { return a.cfg.BaseURL != "" && a.cfg.TokenSource != nil }
+
+func (a *Adapter) be() backend {
+	if a.rest != nil {
+		return a.rest
+	}
+	return a.sim
+}
 
 func (a *Adapter) Snapshot(ctx context.Context, id string) (provider.Snapshot, error) {
-	// if a.live() { return a.snapshotHTTP(ctx, id) }  // TODO: real Deepal API
-	return a.sim.Snapshot(ctx, id)
+	return a.be().Snapshot(ctx, id)
 }
-func (a *Adapter) Lock(ctx context.Context, id string) error        { return a.sim.Lock(ctx, id) }
-func (a *Adapter) Unlock(ctx context.Context, id string) error      { return a.sim.Unlock(ctx, id) }
-func (a *Adapter) RemoteStart(ctx context.Context, id string) error { return a.sim.RemoteStart(ctx, id) }
-func (a *Adapter) RemoteStop(ctx context.Context, id string) error  { return a.sim.RemoteStop(ctx, id) }
+func (a *Adapter) Lock(ctx context.Context, id string) error   { return a.be().Lock(ctx, id) }
+func (a *Adapter) Unlock(ctx context.Context, id string) error { return a.be().Unlock(ctx, id) }
+func (a *Adapter) RemoteStart(ctx context.Context, id string) error {
+	return a.be().RemoteStart(ctx, id)
+}
+func (a *Adapter) RemoteStop(ctx context.Context, id string) error { return a.be().RemoteStop(ctx, id) }
 func (a *Adapter) SetClimate(ctx context.Context, id string, on bool, t float64) error {
-	return a.sim.SetClimate(ctx, id, on, t)
+	return a.be().SetClimate(ctx, id, on, t)
 }
-
-// --- Auxiliary controls (delegated to the simulator until the real API is wired) ---
 func (a *Adapter) SetLights(ctx context.Context, id string, on bool) error {
-	return a.sim.SetLights(ctx, id, on)
+	return a.be().SetLights(ctx, id, on)
 }
 func (a *Adapter) SetTrunk(ctx context.Context, id string, open bool) error {
-	return a.sim.SetTrunk(ctx, id, open)
+	return a.be().SetTrunk(ctx, id, open)
 }
-func (a *Adapter) Honk(ctx context.Context, id string) error {
-	return a.sim.Honk(ctx, id)
-}
+func (a *Adapter) Honk(ctx context.Context, id string) error { return a.be().Honk(ctx, id) }
 func (a *Adapter) SetSeat(ctx context.Context, id string, seat provider.SeatCmd) error {
-	return a.sim.SetSeat(ctx, id, seat)
+	return a.be().SetSeat(ctx, id, seat)
 }

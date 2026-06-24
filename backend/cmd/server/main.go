@@ -62,7 +62,7 @@ func main() {
 	}
 	mirrorIDs := make([]string, 0, len(brandOf))
 	for vehicleID, brand := range brandOf {
-		if adapter, ok := brands.New(brand, brands.Config{}); ok {
+		if adapter, ok := brands.New(brand, brandConfig(brand)); ok {
 			registry.Bind(vehicleID, adapter)
 			mirrorIDs = append(mirrorIDs, vehicleID)
 		}
@@ -181,4 +181,27 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// brandConfig builds a live API config for a brand from environment variables,
+// e.g. VOYAH_API_URL + VOYAH_API_TOKEN. When the URL is unset the adapter stays
+// on the simulator. The token is sent as `Authorization: Bearer <token>`;
+// supply a long-lived fleet token (Secret Manager) or swap the TokenSource for
+// an OAuth client-credentials exchange once the OEM grants credentials.
+func brandConfig(brand string) brands.Config {
+	up := strings.ToUpper(brand)
+	url := os.Getenv(up + "_API_URL")
+	if url == "" {
+		return brands.Config{} // not configured → simulator
+	}
+	token := os.Getenv(up + "_API_TOKEN")
+	if token == "" {
+		log.Printf("brand %s: %s_API_URL set but %s_API_TOKEN missing — staying on simulator", brand, up, up)
+		return brands.Config{}
+	}
+	log.Printf("brand %s: LIVE API at %s", brand, url)
+	return brands.Config{
+		BaseURL:     url,
+		TokenSource: func(context.Context) (string, error) { return token, nil },
+	}
 }

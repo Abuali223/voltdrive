@@ -1,25 +1,18 @@
 // Package voyah implements provider.VehicleProvider for Voyah (Dongfeng's
 // premium EV brand).
 //
-// It WORKS today via an embedded simulator (so the whole app is demonstrable),
-// and is structured so the real Voyah cloud API drops in method-by-method.
-//
-// Connecting the real API (when granted by Voyah HQ / the official distributor):
-//  1. Put the base URL + OAuth token source in Config (loaded from Secret Manager).
-//  2. Replace each `a.sim.X(...)` call below with the real HTTP request, e.g.
-//        GET  {BaseURL}/vehicle/{vin}/status            -> Snapshot
-//        POST {BaseURL}/vehicle/{vin}/command/door       -> Lock/Unlock
-//        POST {BaseURL}/vehicle/{vin}/command/engine     -> RemoteStart/Stop
-//        POST {BaseURL}/vehicle/{vin}/command/hvac        -> SetClimate
-//     using a.do(...) with the Authorization: Bearer token.
+// It WORKS today via an embedded simulator, and switches to the real Voyah
+// cloud API automatically the moment credentials are configured: pass a
+// BaseURL + TokenSource in Config (from env / Secret Manager) and every call
+// routes through the generic oemrest client instead of the simulator. Adjust
+// oemrest's endpoint paths + field tags to the official Voyah API spec.
 package voyah
 
 import (
 	"context"
-	"net/http"
-	"time"
 
 	"voltdrive/backend/internal/provider"
+	"voltdrive/backend/internal/provider/oemrest"
 	"voltdrive/backend/internal/provider/sim"
 )
 
@@ -29,14 +22,28 @@ type Config struct {
 	TokenSource func(ctx context.Context) (string, error)
 }
 
-// Adapter talks to Voyah. Until the real API is wired, it serves the simulator.
-type Adapter struct {
-	cfg    Config
-	client *http.Client
-	sim    *sim.Engine
+// backend is the method set both the simulator and the live REST client share.
+type backend interface {
+	Snapshot(ctx context.Context, id string) (provider.Snapshot, error)
+	Lock(ctx context.Context, id string) error
+	Unlock(ctx context.Context, id string) error
+	RemoteStart(ctx context.Context, id string) error
+	RemoteStop(ctx context.Context, id string) error
+	SetClimate(ctx context.Context, id string, on bool, targetC float64) error
+	SetLights(ctx context.Context, id string, on bool) error
+	SetTrunk(ctx context.Context, id string, open bool) error
+	Honk(ctx context.Context, id string) error
+	SetSeat(ctx context.Context, id string, seat provider.SeatCmd) error
 }
 
-// New returns a working Voyah adapter (simulator-backed until the real API is wired).
+// Adapter serves the simulator until real credentials switch it to the live API.
+type Adapter struct {
+	sim  *sim.Engine
+	rest *oemrest.Client
+}
+
+// New returns a working Voyah adapter. With cfg.BaseURL set it talks to the
+// real cloud API; otherwise it runs the simulator.
 func New(cfg Config) *Adapter {
 	seed := []provider.Snapshot{{
 		VehicleID: "voyah-001", Name: "Voyah Free", Online: true,
@@ -46,36 +53,42 @@ func New(cfg Config) *Adapter {
 		Location: provider.Location{Lat: 40.7821, Lng: 72.3442, Heading: 90},
 		Health:   provider.Health{OdometerKm: 12480, TirePressures: [4]int{230, 230, 228, 229}, ServiceDueKm: 4500},
 	}}
-	return &Adapter{cfg: cfg, client: &http.Client{Timeout: 20 * time.Second}, sim: sim.New("voyah", seed)}
+	a := &Adapter{sim: sim.New("voyah", seed)}
+	if cfg.BaseURL != "" && cfg.TokenSource != nil {
+		a.rest = oemrest.New(cfg.BaseURL, cfg.TokenSource)
+	}
+	return a
 }
 
 func (a *Adapter) Brand() string { return "voyah" }
 
-// live reports whether real API credentials are configured.
-func (a *Adapter) live() bool { return a.cfg.BaseURL != "" && a.cfg.TokenSource != nil }
+// be picks the live REST client when configured, else the simulator.
+func (a *Adapter) be() backend {
+	if a.rest != nil {
+		return a.rest
+	}
+	return a.sim
+}
 
 func (a *Adapter) Snapshot(ctx context.Context, id string) (provider.Snapshot, error) {
-	// if a.live() { return a.snapshotHTTP(ctx, id) }  // TODO: real Voyah API
-	return a.sim.Snapshot(ctx, id)
+	return a.be().Snapshot(ctx, id)
 }
-func (a *Adapter) Lock(ctx context.Context, id string) error        { return a.sim.Lock(ctx, id) }
-func (a *Adapter) Unlock(ctx context.Context, id string) error      { return a.sim.Unlock(ctx, id) }
-func (a *Adapter) RemoteStart(ctx context.Context, id string) error { return a.sim.RemoteStart(ctx, id) }
-func (a *Adapter) RemoteStop(ctx context.Context, id string) error  { return a.sim.RemoteStop(ctx, id) }
+func (a *Adapter) Lock(ctx context.Context, id string) error   { return a.be().Lock(ctx, id) }
+func (a *Adapter) Unlock(ctx context.Context, id string) error { return a.be().Unlock(ctx, id) }
+func (a *Adapter) RemoteStart(ctx context.Context, id string) error {
+	return a.be().RemoteStart(ctx, id)
+}
+func (a *Adapter) RemoteStop(ctx context.Context, id string) error { return a.be().RemoteStop(ctx, id) }
 func (a *Adapter) SetClimate(ctx context.Context, id string, on bool, t float64) error {
-	return a.sim.SetClimate(ctx, id, on, t)
+	return a.be().SetClimate(ctx, id, on, t)
 }
-
-// --- Auxiliary controls (delegated to the simulator until the real API is wired) ---
 func (a *Adapter) SetLights(ctx context.Context, id string, on bool) error {
-	return a.sim.SetLights(ctx, id, on)
+	return a.be().SetLights(ctx, id, on)
 }
 func (a *Adapter) SetTrunk(ctx context.Context, id string, open bool) error {
-	return a.sim.SetTrunk(ctx, id, open)
+	return a.be().SetTrunk(ctx, id, open)
 }
-func (a *Adapter) Honk(ctx context.Context, id string) error {
-	return a.sim.Honk(ctx, id)
-}
+func (a *Adapter) Honk(ctx context.Context, id string) error { return a.be().Honk(ctx, id) }
 func (a *Adapter) SetSeat(ctx context.Context, id string, seat provider.SeatCmd) error {
-	return a.sim.SetSeat(ctx, id, seat)
+	return a.be().SetSeat(ctx, id, seat)
 }
