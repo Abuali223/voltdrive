@@ -190,16 +190,20 @@ func (s *Server) handleDeviceTest(w http.ResponseWriter, r *http.Request, user a
 		writeErr(w, http.StatusBadGateway, "could not load devices")
 		return
 	}
-	uz := r.Header.Get("Accept-Language") == "uz"
-	title := "VoltDrive"
-	body := "Test notification — push is working."
-	if uz {
-		body = "Sinov bildirishnomasi — push ishlayapti."
+	// One sample of each notification category so the user sees the variety.
+	samples := []notify.Alert{
+		{Title: "VoltDrive", Body: "Bildirishnomalar yoqildi ✓", Data: map[string]string{"type": "test"}},
+		{Title: "VoltDrive — Zaryad", Body: "Voyah Free zaryadlandi — 100%", Data: map[string]string{"type": "charge_complete"}},
+		{Title: "VoltDrive — Batareya", Body: "Voyah Free batareyasi 15% dan pastga tushdi", Data: map[string]string{"type": "low_battery"}},
+		{Title: "VoltDrive — Xavfsizlik ⚠️", Body: "Voyah Free qulflangan holatda harakatlandi", Data: map[string]string{"type": "moved_while_locked"}},
 	}
 	sent := 0
 	for _, t := range tokens {
-		if _, err := s.FCM.Send(r.Context(), notify.Alert{DeviceToken: t, Title: title, Body: body, Data: map[string]string{"type": "test"}}); err == nil {
-			sent++
+		for _, a := range samples {
+			a.DeviceToken = t
+			if _, err := s.FCM.Send(r.Context(), a); err == nil {
+				sent++
+			}
 		}
 	}
 	audit(r, user, "-", "device-test", nil)

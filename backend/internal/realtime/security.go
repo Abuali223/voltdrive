@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"fmt"
 	"math"
 
 	"voltdrive/backend/internal/provider"
@@ -37,6 +38,18 @@ func (h *Hub) securityWatch(ctx context.Context, prev *provider.Snapshot, cur pr
 	if prev.Lock == provider.Locked && cur.Lock == provider.Unlocked {
 		h.alerter.VehicleAlert(ctx, cur.VehicleID, "unlocked",
 			cur.Name+" eshiklari ochildi")
+	}
+
+	// 4. Charging finished (was charging, stopped with a healthy battery).
+	if prev.Energy.Charging && !cur.Energy.Charging && cur.Energy.BatteryLevel >= 80 {
+		h.alerter.VehicleAlert(ctx, cur.VehicleID, "charge_complete",
+			fmt.Sprintf("%s zaryadlandi — %d%%", cur.Name, cur.Energy.BatteryLevel))
+	}
+
+	// 5. Battery reached full.
+	if prev.Energy.BatteryLevel < 100 && cur.Energy.BatteryLevel >= 100 {
+		h.alerter.VehicleAlert(ctx, cur.VehicleID, "charge_full",
+			cur.Name+" to‘liq zaryadlandi (100%)")
 	}
 }
 

@@ -32,12 +32,26 @@ func (a *FCMAlerter) VehicleAlert(ctx context.Context, vehicleID, kind, message 
 	for _, t := range tokens {
 		_, err := a.FCM.Send(ctx, Alert{
 			DeviceToken: t,
-			Title:       "VoltDrive — Xavfsizlik",
+			Title:       titleForKind(kind),
 			Body:        message,
 			Data:        map[string]string{"vehicleId": vehicleID, "type": kind},
 		})
 		if err != nil {
 			log.Printf("alert: send to device: %v", err)
 		}
+	}
+}
+
+// titleForKind gives each alert category its own notification title.
+func titleForKind(kind string) string {
+	switch kind {
+	case "charge_complete", "charge_full":
+		return "VoltDrive — Zaryad"
+	case "low_battery":
+		return "VoltDrive — Batareya"
+	case "moved_while_locked", "unlocked":
+		return "VoltDrive — Xavfsizlik ⚠️"
+	default:
+		return "VoltDrive"
 	}
 }

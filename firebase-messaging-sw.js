@@ -24,6 +24,10 @@ messaging.onBackgroundMessage((payload) => {
     data: payload.data || {},
     vibrate: [60, 30, 60],
   });
+  // Forward to any open client so the in-app Alerts history can log it.
+  self.clients.matchAll({ includeUncontrolled: true, type: "window" }).then((cs) => {
+    cs.forEach((c) => c.postMessage({ type: "fcm", payload }));
+  });
 });
 
 // Focus/open the app when a notification is tapped.

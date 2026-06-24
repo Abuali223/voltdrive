@@ -369,7 +369,7 @@ body{
   <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 22px 0;flex-shrink:0;">
     <div class="ibtn" onclick="App.back()"><i data-lucide="chevron-left" style="width:18px;height:18px"></i></div>
     <div style="font-family:'Sora';font-weight:700;font-size:16px;color:#fff;" data-i18n="charge.title">Car Status</div>
-    <div class="ibtn"><i data-lucide="bell" style="width:18px;height:18px"></i></div>
+    <div class="ibtn" onclick="App.go('alerts')"><i data-lucide="bell" style="width:18px;height:18px"></i></div>
   </div>
   <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
     <div style="display:flex;justify-content:center;margin-top:12px;">
@@ -794,6 +794,28 @@ body{
   </div>
 </div>
 
+<!-- ===== SCREEN: ALERTS (notification history) ===== -->
+<div class="screen" id="s-alerts">
+  <div class="sb"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 22px 0;flex-shrink:0;">
+    <div class="ibtn" onclick="App.back()"><i data-lucide="chevron-left" style="width:18px;height:18px"></i></div>
+    <div style="font-family:'Sora';font-weight:700;font-size:16px;color:#fff;" data-i18n="alerts.title">Notifications</div>
+    <div class="ibtn" onclick="App.clearAlerts()"><i data-lucide="trash-2" style="width:17px;height:17px"></i></div>
+  </div>
+  <div id="alerts-list" style="flex:1;overflow-y:auto;padding:14px 22px 90px;">
+    <div id="alerts-empty" style="text-align:center;color:#6a6c72;font-size:13px;margin-top:60px;">
+      <i data-lucide="bell-off" style="width:34px;height:34px;color:#3a3c42"></i>
+      <div style="margin-top:12px;" data-i18n="alerts.empty">No notifications yet</div>
+    </div>
+  </div>
+  <div class="bnav">
+    <div class="ni" onclick="App.go('home')"><i data-lucide="layout-grid" style="width:22px;height:22px"></i></div>
+    <div class="ni" onclick="App.go('charge')"><i data-lucide="zap" style="width:22px;height:22px"></i></div>
+    <div class="ni" onclick="App.go('map')"><i data-lucide="map-pin" style="width:22px;height:22px"></i></div>
+    <div class="ni" onclick="App.go('profile')"><i data-lucide="user" style="width:22px;height:22px"></i></div>
+  </div>
+</div>
+
 </div><!-- #phone -->
 
 <script>
@@ -842,7 +864,8 @@ const App = {
     'family.owner':'Egasi','family.drivesub':'Haydash · qulf · iqlim',
     'family.driver':'Haydovchi','family.limsub':'Joylashuv · faqat qulf',
     'family.limited':'Cheklangan','family.invite':'Gmail orqali taklif qilish',
-    'lbl.home':'Bosh sahifa'
+    'lbl.home':'Bosh sahifa',
+    'alerts.title':'Bildirishnomalar','alerts.empty':'Hozircha bildirishnoma yo\'q'
   },
 
   origEN: {},
@@ -946,6 +969,7 @@ const App = {
   changePin() {},
   inviteMember() {},
   enableNotifications() {},
+  clearAlerts() {},
 
   // Add a vehicle to the garage. Lists supported, backend-seeded cars that
   // aren't in the garage yet (e.g. BYD). New brands beyond these need their

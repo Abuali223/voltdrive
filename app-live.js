@@ -487,6 +487,8 @@ function wireControls() {
   App.inviteMember = inviteMember;
   // Notifications (profile row) → enable push.
   App.enableNotifications = enableNotifications;
+  // Alerts screen → clear notification history.
+  App.clearAlerts = clearAlerts;
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
   const origLights = App.toggleLights.bind(App);
@@ -804,6 +806,8 @@ function wireExtras() {
       if (s === "access") locateDevice(true);
       // Family sharing: load the current member list from the backend.
       if (s === "family") loadMembers();
+      // Notification history.
+      if (s === "alerts") renderAlerts();
     };
   }
   if (App.current === "map") ensureMap();
@@ -1444,11 +1448,32 @@ async function putMember(email, role) {
     });
     if (!res.ok) throw new Error("HTTP " + res.status);
     renderMembers((await res.json()).members || []);
-    toast((uz ? "Taklif qilindi: " : "Invited: ") + email, "ok");
+    toast((uz ? "Qo‘shildi: " : "Added: ") + email, "ok");
     haptic([10, 40, 12]);
+    sendInviteEmail(email, role); // open Gmail/share with a real invite
   } catch (e) {
     toast((uz ? "Xato: " : "Failed: ") + e.message, "err");
   }
+}
+
+// sendInviteEmail opens the phone's share sheet (Gmail/Telegram/…) or the email
+// composer with a ready-to-send invite — a real message from the owner.
+function sendInviteEmail(email, role) {
+  const uz = window.App?.lang === "uz";
+  const link = location.origin || "https://eldi-79bf9.web.app";
+  const roleTxt = role === "driver" ? (uz ? "Haydovchi" : "Driver") : (uz ? "Cheklangan" : "Limited");
+  const subject = uz ? "VoltDrive — sizni mashinaga taklif qilishdi" : "VoltDrive — you’ve been invited";
+  const body = uz
+    ? `Assalomu alaykum!\n\nSizni VoltDrive ilovasida mashinani boshqarishga taklif qilishdi.\nRol: ${roleTxt}\n\nIlovani oching va shu email (${email}) bilan ro‘yxatdan o‘ting:\n${link}\n\n— VoltDrive`
+    : `Hello!\n\nYou’ve been invited to control a car in VoltDrive.\nRole: ${roleTxt}\n\nOpen the app and sign in with this email (${email}):\n${link}\n\n— VoltDrive`;
+  try {
+    if (navigator.share) {
+      navigator.share({ title: subject, text: body }).catch(() => {});
+    } else {
+      window.location.href =
+        `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    }
+  } catch (e) { /* user cancelled */ }
 }
 
 async function removeMember(email) {
@@ -1512,6 +1537,7 @@ async function enableNotifications() {
       const n = p.notification || {};
       toast((n.title ? n.title + " — " : "") + (n.body || ""), "ok");
       haptic([60, 30, 60]);
+      logAlert({ title: n.title, body: n.body, type: p.data && p.data.type });
     });
 
     // Round-trip test so the user immediately sees it works.
@@ -1522,6 +1548,83 @@ async function enableNotifications() {
   } catch (e) {
     toast((uz ? "Xato: " : "Failed: ") + (e?.message || e), "err");
   }
+}
+
+// --- Notification history (Alerts screen) ---
+
+const ALERTS_KEY = "vd_alerts";
+
+function loadAlertsStore() {
+  try { return JSON.parse(localStorage.getItem(ALERTS_KEY) || "[]"); } catch (e) { return []; }
+}
+function saveAlertsStore(a) {
+  try { localStorage.setItem(ALERTS_KEY, JSON.stringify(a.slice(0, 50))); } catch (e) {}
+}
+
+function logAlert(n) {
+  const item = { title: n.title || "VoltDrive", body: n.body || "", type: n.type || "info", ts: Date.now() };
+  const list = loadAlertsStore();
+  list.unshift(item);
+  saveAlertsStore(list);
+  if (window.App && App.current === "alerts") renderAlerts();
+}
+
+function alertIcon(type) {
+  if (type === "charge_complete" || type === "charge_full") return ["zap", "#37d67a"];
+  if (type === "low_battery") return ["battery-low", "#FF8A3D"];
+  if (type === "moved_while_locked" || type === "unlocked") return ["shield-alert", "#ff5252"];
+  return ["bell", "#9a9ca2"];
+}
+
+function relTime(ts) {
+  const uz = window.App?.lang === "uz";
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return uz ? "hozir" : "now";
+  const m = Math.floor(s / 60); if (m < 60) return m + (uz ? " daq" : "m");
+  const h = Math.floor(m / 60); if (h < 24) return h + (uz ? " soat" : "h");
+  return Math.floor(h / 24) + (uz ? " kun" : "d");
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function renderAlerts() {
+  const wrap = document.getElementById("alerts-list");
+  if (!wrap) return;
+  const list = loadAlertsStore();
+  const empty = document.getElementById("alerts-empty");
+  [...wrap.querySelectorAll("[data-alert]")].forEach((e) => e.remove());
+  if (!list.length) { if (empty) empty.style.display = ""; return; }
+  if (empty) empty.style.display = "none";
+  list.forEach((n) => {
+    const [ic, col] = alertIcon(n.type);
+    const row = document.createElement("div");
+    row.dataset.alert = "1";
+    row.style.cssText = "display:flex;gap:12px;padding:13px 14px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);margin-bottom:9px;";
+    row.innerHTML =
+      '<div style="width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:' + col + ';"><i data-lucide="' + ic + '" style="width:18px;height:18px"></i></div>' +
+      '<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#fff;font-weight:600;font-size:13px;">' + escapeHtml(n.title) + '</span><span style="color:#6a6c72;font-size:11px;flex-shrink:0;">' + relTime(n.ts) + '</span></div>' +
+      '<div style="color:#9a9ca2;font-size:12px;margin-top:2px;">' + escapeHtml(n.body) + "</div></div>";
+    wrap.appendChild(row);
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
+function clearAlerts() {
+  saveAlertsStore([]);
+  renderAlerts();
+  toast(window.App?.lang === "uz" ? "Tozalandi" : "Cleared");
+}
+
+// Capture background pushes forwarded by firebase-messaging-sw.js.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (e) => {
+    if (e.data && e.data.type === "fcm" && e.data.payload) {
+      const p = e.data.payload, n = p.notification || {};
+      logAlert({ title: n.title, body: n.body, type: p.data && p.data.type });
+    }
+  });
 }
 
 // --- Warm-up prompt (shown right after the PIN unlock) ---
