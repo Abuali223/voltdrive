@@ -1,0 +1,16 @@
+{
+  "rules": {
+    "vehicles": {
+      "$vehicleId": {
+        ".read": "auth != null && root.child('access').child(auth.uid).child($vehicleId).exists()",
+        ".write": false
+      }
+    },
+    "access": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "_comment": "Realtime Database boshlang'ich tuzilmasi. Firebase Console > Realtime Database > (uch nuqta) > Import JSON orqali yuklang. Ruxsat (access) — kim qaysi mashinani ko'rishini belgilaydi; security qoidalar shuni tekshiradi. {UID} ni Authentication'dagi real foydalanuvchi UID'iga almashtiring.",
+
+  "access": {
+    "REPLACE_WITH_USER_UID": {
+      "voyah-001": true,
+      "deepal-002": true
+    }
+  },
+
+  "vehicles": {
+    "_comment": "Bu tugunlarni backend avtomatik to'ldiradi (telemetriya). Qo'lda yozish shart emas."
+  }
+}
