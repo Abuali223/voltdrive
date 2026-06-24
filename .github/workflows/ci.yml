@@ -1,4 +1,31 @@
-# NOTE: GitHub blocks pushing files under .github/workflows/ without the
-# `workflow` token scope, so this lives here. To activate CI, move/rename it to
-# .github/workflows/ci.yml via the GitHub UI (or push it with a workflow-scoped token).
-
+name: CI
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+jobs:
+  backend:
+    name: Backend (go test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: backend/go.sum
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+  frontend:
+    name: Frontend (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install --no-save vitest@^2.1.9
+      - run: npx vitest run
