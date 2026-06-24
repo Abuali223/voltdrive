@@ -18,6 +18,8 @@ import (
 	"voltdrive/backend/internal/auth"
 	"voltdrive/backend/internal/devices"
 	"voltdrive/backend/internal/members"
+	"voltdrive/backend/internal/geofence"
+	"voltdrive/backend/internal/guestkey"
 	"voltdrive/backend/internal/notify"
 	"voltdrive/backend/internal/provider"
 	"voltdrive/backend/internal/realtime"
@@ -32,8 +34,10 @@ type Server struct {
 	Hub            *realtime.Hub  // optional: real-time telemetry stream
 	Members        *members.Store // optional: family/shared-access management
 	Devices        *devices.Store  // optional: FCM device-token registry
-	Schedules      *schedule.Store // optional: departure-timer storage
-	FCM            *notify.FCM     // optional: push sender (for the test endpoint)
+	Schedules      *schedule.Store  // optional: departure-timer storage
+	GuestKeys      *guestkey.Store  // optional: time-limited guest access
+	Geofences      *geofence.Store  // optional: safe-zone storage
+	FCM            *notify.FCM      // optional: push sender (for the test endpoint)
 	AllowedOrigins []string       // CORS allowlist (empty = permissive "*")
 	RatePerSec     float64        // per-IP request rate (default 20)
 	RateBurst      float64        // per-IP burst (default 40)
@@ -89,6 +93,25 @@ func (s *Server) Routes() http.Handler {
 	if s.Schedules != nil {
 		mux.HandleFunc("GET /v1/vehicles/{id}/schedule", s.guard(auth.ActView, s.handleScheduleGet))
 		mux.HandleFunc("PUT /v1/vehicles/{id}/schedule", s.guard(auth.ActStart, s.handleSchedulePut))
+	}
+
+	// Panic alarm: flash lights + sound the horn. Owner/driver only.
+	mux.HandleFunc("POST /v1/vehicles/{id}/panic", s.guard(auth.ActStart, s.handlePanic))
+
+	// Guest keys: owner issues/lists/revokes; guests redeem the code with no
+	// account (the code is the credential) and send only scoped commands.
+	if s.GuestKeys != nil {
+		mux.HandleFunc("GET /v1/vehicles/{id}/guestkeys", s.guard(auth.ActManage, s.handleGuestKeysList))
+		mux.HandleFunc("POST /v1/vehicles/{id}/guestkeys", s.guard(auth.ActManage, s.handleGuestKeyCreate))
+		mux.HandleFunc("DELETE /v1/vehicles/{id}/guestkeys/{code}", s.guard(auth.ActManage, s.handleGuestKeyRevoke))
+		mux.HandleFunc("POST /v1/guest/redeem", s.handleGuestRedeem)
+		mux.HandleFunc("POST /v1/guest/command", s.handleGuestCommand)
+	}
+
+	// Geofence (safe zone). Owner-managed; the watcher alerts on exit.
+	if s.Geofences != nil {
+		mux.HandleFunc("GET /v1/vehicles/{id}/geofence", s.guard(auth.ActView, s.handleGeofenceGet))
+		mux.HandleFunc("PUT /v1/vehicles/{id}/geofence", s.guard(auth.ActManage, s.handleGeofencePut))
 	}
 
 	// Real-time telemetry stream (WebSocket).
@@ -477,6 +500,185 @@ func (s *Server) handleSchedulePut(w http.ResponseWriter, r *http.Request, user 
 	}
 	audit(r, user, id, fmt.Sprintf("schedule:%02d:%02d:%v", sc.Hour, sc.Minute, sc.Enabled), nil)
 	writeJSON(w, http.StatusOK, sc)
+}
+
+// --- Panic alarm ---
+
+func (s *Server) handlePanic(w http.ResponseWriter, r *http.Request, user auth.User) {
+	id := r.PathValue("id")
+	a, ok := s.aux(id)
+	if !ok {
+		writeProviderErr(w, provider.ErrUnsupported)
+		return
+	}
+	_ = a.SetLights(r.Context(), id, true)
+	err := a.Honk(r.Context(), id)
+	audit(r, user, id, "panic", err)
+	if err != nil {
+		writeProviderErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// --- Guest keys ---
+
+func (s *Server) handleGuestKeysList(w http.ResponseWriter, r *http.Request, _ auth.User) {
+	keys, err := s.GuestKeys.ListActive(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not list guest keys")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"keys": keys})
+}
+
+func (s *Server) handleGuestKeyCreate(w http.ResponseWriter, r *http.Request, user auth.User) {
+	id := r.PathValue("id")
+	var req struct {
+		Hours float64  `json:"hours"`
+		Scope []string `json:"scope"`
+		Label string   `json:"label"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.Hours <= 0 || req.Hours > 720 {
+		writeErr(w, http.StatusBadRequest, "hours must be 1-720")
+		return
+	}
+	scope := filterScope(req.Scope)
+	if len(scope) == 0 {
+		scope = []string{"unlock", "lock"} // safe default: doors only
+	}
+	k, err := s.GuestKeys.Create(r.Context(), guestkey.Key{
+		VehicleID: id,
+		Scope:     scope,
+		ExpiresAt: time.Now().Add(time.Duration(req.Hours * float64(time.Hour))).Unix(),
+		Label:     req.Label,
+	}, user.UID)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not create guest key")
+		return
+	}
+	audit(r, user, id, "guestkey:create", nil)
+	writeJSON(w, http.StatusOK, k)
+}
+
+func (s *Server) handleGuestKeyRevoke(w http.ResponseWriter, r *http.Request, user auth.User) {
+	code := r.PathValue("code")
+	if err := s.GuestKeys.Revoke(r.Context(), code); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not revoke guest key")
+		return
+	}
+	audit(r, user, r.PathValue("id"), "guestkey:revoke", nil)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleGuestRedeem validates a code (no account needed) and returns what the
+// guest is allowed to do, plus the vehicle name for display.
+func (s *Server) handleGuestRedeem(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	k, err := s.GuestKeys.Get(r.Context(), strings.ToUpper(strings.TrimSpace(req.Code)))
+	if err != nil || !k.Active() {
+		writeErr(w, http.StatusForbidden, "invalid or expired key")
+		return
+	}
+	name := k.VehicleID
+	if snap, err := s.Registry.For(k.VehicleID).Snapshot(r.Context(), k.VehicleID); err == nil && snap.Name != "" {
+		name = snap.Name
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"vehicleId": k.VehicleID, "vehicleName": name,
+		"scope": k.Scope, "expiresAt": k.ExpiresAt, "label": k.Label,
+	})
+}
+
+// handleGuestCommand executes a single scoped command authenticated by the
+// guest code itself.
+func (s *Server) handleGuestCommand(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Code   string `json:"code"`
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	k, err := s.GuestKeys.Get(r.Context(), strings.ToUpper(strings.TrimSpace(req.Code)))
+	if err != nil || !k.Active() {
+		writeErr(w, http.StatusForbidden, "invalid or expired key")
+		return
+	}
+	if !k.Allows(req.Action) {
+		writeErr(w, http.StatusForbidden, "action not allowed for this key")
+		return
+	}
+	p := s.Registry.For(k.VehicleID)
+	switch req.Action {
+	case "unlock":
+		err = p.Unlock(r.Context(), k.VehicleID)
+	case "lock":
+		err = p.Lock(r.Context(), k.VehicleID)
+	case "start":
+		err = p.RemoteStart(r.Context(), k.VehicleID)
+	default:
+		writeErr(w, http.StatusBadRequest, "unknown action")
+		return
+	}
+	log.Printf("guest command: %s %s (key %s)", req.Action, k.VehicleID, k.Code)
+	if err != nil {
+		writeProviderErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "action": req.Action})
+}
+
+func filterScope(in []string) []string {
+	allowed := map[string]bool{"unlock": true, "lock": true, "start": true}
+	var out []string
+	for _, s := range in {
+		if allowed[s] {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// --- Geofence ---
+
+func (s *Server) handleGeofenceGet(w http.ResponseWriter, r *http.Request, _ auth.User) {
+	z, err := s.Geofences.Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load geofence")
+		return
+	}
+	writeJSON(w, http.StatusOK, z)
+}
+
+func (s *Server) handleGeofencePut(w http.ResponseWriter, r *http.Request, user auth.User) {
+	id := r.PathValue("id")
+	var z geofence.Zone
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&z); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if z.RadiusM < 50 || z.RadiusM > 50000 {
+		writeErr(w, http.StatusBadRequest, "radiusM must be 50-50000")
+		return
+	}
+	if err := s.Geofences.Put(r.Context(), id, z); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not save geofence")
+		return
+	}
+	audit(r, user, id, fmt.Sprintf("geofence:%v:%dm", z.Enabled, int(z.RadiusM)), nil)
+	writeJSON(w, http.StatusOK, z)
 }
 
 // replyState returns the fresh snapshot after a successful command so the

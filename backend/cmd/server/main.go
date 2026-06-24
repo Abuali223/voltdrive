@@ -31,6 +31,8 @@ import (
 	"voltdrive/backend/internal/auth"
 	"voltdrive/backend/internal/devices"
 	"voltdrive/backend/internal/gcp"
+	"voltdrive/backend/internal/geofence"
+	"voltdrive/backend/internal/guestkey"
 	"voltdrive/backend/internal/members"
 	"voltdrive/backend/internal/notify"
 	"voltdrive/backend/internal/provider"
@@ -104,14 +106,17 @@ func main() {
 		log.Printf("members: Firestore store enabled (project %s)", projectID)
 	}
 
-	// --- Departure timer (daily warm-up) ---
+	// --- Departure timer, guest keys, geofence (Firestore) ---
 	var scheduleStore *schedule.Store
+	var guestStore *guestkey.Store
+	var geoStore *geofence.Store
 	if projectID != "" {
-		scheduleStore = schedule.NewStore(projectID, gcp.NewTokenSource(
-			"https://www.googleapis.com/auth/datastore",
-		).Token)
-		go runScheduler(scheduleStore, registry)
-		log.Printf("scheduler: departure timer enabled")
+		dsToken := gcp.NewTokenSource("https://www.googleapis.com/auth/datastore").Token
+		scheduleStore = schedule.NewStore(projectID, dsToken)
+		guestStore = guestkey.NewStore(projectID, dsToken)
+		geoStore = geofence.NewStore(projectID, dsToken)
+		go runScheduler(scheduleStore, geoStore, registry)
+		log.Printf("scheduler: departure timer + geofence watcher enabled")
 	}
 
 	// --- Real-time telemetry hub ---
@@ -175,6 +180,8 @@ func main() {
 		Members:        memberStore,
 		Devices:        deviceStore,
 		Schedules:      scheduleStore,
+		GuestKeys:      guestStore,
+		Geofences:      geoStore,
 		FCM:            fcm,
 		AllowedOrigins: origins,
 		RatePerSec:     20,
@@ -206,20 +213,22 @@ func main() {
 	_ = httpServer.Shutdown(ctx)
 }
 
-// runScheduler checks every minute and, at each vehicle's set local time
-// (Asia/Tashkent = UTC+5), warms the car up: remote start + climate. Works
-// server-side, so it fires even when no app is open. Fires once per minute slot.
-func runScheduler(store *schedule.Store, registry *provider.Registry) {
+// runScheduler runs once a minute. It (1) warms each car up at its set local
+// time (Asia/Tashkent = UTC+5) — remote start + climate — and (2) watches every
+// geofenced car, logging an alert when one leaves its safe zone. Both work
+// server-side, so they fire even when no app is open.
+func runScheduler(store *schedule.Store, geo *geofence.Store, registry *provider.Registry) {
 	const offset = 5 * time.Hour // Tashkent, no DST
 	fired := map[string]string{}
+	inside := map[string]bool{} // last known in-zone state per vehicle
 	t := time.NewTicker(60 * time.Second)
 	defer t.Stop()
 	for {
 		now := time.Now().UTC().Add(offset)
 		slot := now.Format("2006-01-02 15:04")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		all, err := store.All(ctx)
-		if err == nil {
+
+		if all, err := store.All(ctx); err == nil {
 			for id, sc := range all {
 				if !sc.Enabled || sc.Hour != now.Hour() || sc.Minute != now.Minute() {
 					continue
@@ -242,6 +251,26 @@ func runScheduler(store *schedule.Store, registry *provider.Registry) {
 				log.Printf("scheduler: warmed up %s at %02d:%02d (%d°C)", id, sc.Hour, sc.Minute, tC)
 			}
 		}
+
+		if geo != nil {
+			if zones, err := geo.All(ctx); err == nil {
+				for id, z := range zones {
+					if !z.Enabled {
+						continue
+					}
+					snap, err := registry.For(id).Snapshot(ctx, id)
+					if err != nil {
+						continue
+					}
+					in := z.Contains(snap.Location.Lat, snap.Location.Lng)
+					if was, seen := inside[id]; seen && was && !in {
+						log.Printf("geofence: ALERT %s left safe zone (%.5f,%.5f)", id, snap.Location.Lat, snap.Location.Lng)
+					}
+					inside[id] = in
+				}
+			}
+		}
+
 		cancel()
 		<-t.C
 	}

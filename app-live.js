@@ -498,6 +498,11 @@ function wireControls() {
   App.findCar = findCar;
   // Home → departure timer (server-side daily warm-up).
   App.openSchedule = openSchedule;
+  // Security: guest keys, geofence, panic; guest redeem entry.
+  App.openGuestKeys = openGuestKeys;
+  App.openGuestEntry = openGuestEntry;
+  App.openGeofence = openGeofence;
+  App.panic = panic;
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
   const origLights = App.toggleLights.bind(App);
@@ -1666,6 +1671,215 @@ function updateScheduleSub(sc) {
   el.textContent = sc.enabled
     ? (uz ? `Har kuni ${String(sc.hour).padStart(2, "0")}:${String(sc.minute).padStart(2, "0")}` : `Daily ${String(sc.hour).padStart(2, "0")}:${String(sc.minute).padStart(2, "0")}`)
     : (uz ? "O‘chiq" : "Off");
+}
+
+// --- Shared modal shell ---
+function vdModal(innerHTML, maxw) {
+  const o = document.createElement("div");
+  o.style.cssText = "position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.62);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:26px;font-family:'Manrope',system-ui;";
+  const box = document.createElement("div");
+  box.style.cssText = "width:100%;max-width:" + (maxw || 340) + "px;background:#16171a;border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:20px;animation:scrIn .26s ease;max-height:84vh;overflow:auto;";
+  box.innerHTML = innerHTML;
+  o.appendChild(box);
+  o.addEventListener("click", (e) => { if (e.target === o) o.remove(); });
+  document.body.appendChild(o);
+  if (window.lucide) lucide.createIcons();
+  return { o, box, close: () => o.remove() };
+}
+
+function curVid() { return VMAP[window.App?.activeCar?.id] || "voyah-001"; }
+
+// --- Panic alarm: flash lights + sound the horn ---
+async function panic() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const r = await fetch(`${CFG.apiBase}/v1/vehicles/${curVid()}/panic`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    toast(uz ? "Trevoga! Signal va faralar yoqildi" : "Panic! Horn & lights on", "ok");
+    haptic([20, 60, 20, 60, 20]);
+  } catch (e) { toast((uz ? "Xato: " : "Failed: ") + e.message, "err"); }
+}
+
+// --- Guest keys (owner): create / list / revoke time-limited shared access ---
+async function openGuestKeys() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  const vid = curVid();
+  const m = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">' + (uz ? "Mehmon kalitlari" : "Guest keys") + "</div>" +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:16px;line-height:1.45;">' + (uz ? "Vaqtinchalik, cheklangan kirish. Kod — kalitning o‘zi; hisob shart emas." : "Time-limited, scoped access. The code is the key — no account needed.") + "</div>" +
+    '<div style="color:#7e8086;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;">' + (uz ? "Amal qilish muddati" : "Valid for") + "</div>" +
+    '<div id="gk-hours" style="display:flex;gap:8px;margin-bottom:14px;"></div>' +
+    '<div style="color:#7e8086;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;">' + (uz ? "Ruxsatlar" : "Permissions") + "</div>" +
+    '<div id="gk-scope" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;"></div>' +
+    '<div id="gk-create" class="obtn">' + (uz ? "Kalit yaratish" : "Create key") + "</div>" +
+    '<div id="gk-list" style="margin-top:16px;"></div>' +
+    '<div id="gk-cancel" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:12px 0 2px;">' + (uz ? "Yopish" : "Close") + "</div>"
+  );
+  let hours = 3;
+  const scope = { unlock: true, lock: true, start: false };
+  const pill = (active) => "padding:8px 13px;border-radius:11px;font-size:13px;font-weight:700;cursor:pointer;user-select:none;" +
+    (active ? "background:linear-gradient(150deg,#FF8A2B,#FF4D00);color:#fff;" : "background:rgba(255,255,255,.06);color:#c8cace;");
+  const hoursWrap = m.box.querySelector("#gk-hours");
+  [[1, "1 " + (uz ? "soat" : "h")], [3, "3 " + (uz ? "soat" : "h")], [24, "24 " + (uz ? "soat" : "h")], [72, "3 " + (uz ? "kun" : "d")]].forEach(([h, lbl]) => {
+    const b = document.createElement("div"); b.textContent = lbl; b.style.cssText = pill(h === hours);
+    b.onclick = () => { hours = h; [...hoursWrap.children].forEach((c, i) => c.style.cssText = pill([1, 3, 24, 72][i] === hours)); };
+    hoursWrap.appendChild(b);
+  });
+  const scopeWrap = m.box.querySelector("#gk-scope");
+  [["unlock", uz ? "Ochish" : "Unlock"], ["lock", uz ? "Yopish" : "Lock"], ["start", uz ? "Yurgizish" : "Start"]].forEach(([k, lbl]) => {
+    const b = document.createElement("div"); b.textContent = lbl; b.style.cssText = pill(scope[k]);
+    b.onclick = () => { scope[k] = !scope[k]; b.style.cssText = pill(scope[k]); };
+    scopeWrap.appendChild(b);
+  });
+  m.box.querySelector("#gk-cancel").onclick = m.close;
+
+  async function token() { return auth.currentUser.getIdToken(); }
+  async function loadList() {
+    const el = m.box.querySelector("#gk-list");
+    try {
+      const r = await fetch(`${CFG.apiBase}/v1/vehicles/${vid}/guestkeys`, { headers: { Authorization: `Bearer ${await token()}` } });
+      const d = await r.json();
+      const keys = (d.keys || []);
+      if (!keys.length) { el.innerHTML = '<div style="color:#6a6c72;font-size:12px;text-align:center;padding:6px;">' + (uz ? "Faol kalit yo‘q" : "No active keys") + "</div>"; return; }
+      el.innerHTML = keys.map((k) => {
+        const left = Math.max(0, Math.round((k.expiresAt - Date.now() / 1000) / 3600));
+        return '<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:12px;padding:10px 12px;margin-bottom:8px;">' +
+          '<div style="flex:1;"><div style="color:#fff;font-weight:800;font-family:\'Sora\';letter-spacing:1px;">' + k.code + "</div>" +
+          '<div style="color:#7e8086;font-size:11px;margin-top:2px;">' + (k.scope || []).join(" · ") + " · " + left + (uz ? " soat qoldi" : "h left") + "</div></div>" +
+          '<div data-revoke="' + k.code + '" style="color:#ff6a6a;font-size:12px;font-weight:700;cursor:pointer;">' + (uz ? "Bekor" : "Revoke") + "</div></div>";
+      }).join("");
+      el.querySelectorAll("[data-revoke]").forEach((b) => b.onclick = async () => {
+        await fetch(`${CFG.apiBase}/v1/vehicles/${vid}/guestkeys/${b.getAttribute("data-revoke")}`, { method: "DELETE", headers: { Authorization: `Bearer ${await token()}` } });
+        loadList();
+      });
+    } catch (e) { el.innerHTML = ""; }
+  }
+  m.box.querySelector("#gk-create").onclick = async () => {
+    const sel = Object.keys(scope).filter((k) => scope[k]);
+    if (!sel.length) { toast(uz ? "Kamida bitta ruxsat tanlang" : "Pick at least one permission"); return; }
+    try {
+      const r = await fetch(`${CFG.apiBase}/v1/vehicles/${vid}/guestkeys`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await token()}` },
+        body: JSON.stringify({ hours, scope: sel, label: "" }),
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const k = await r.json();
+      haptic([10, 40, 12]);
+      shareGuestKey(k.code, hours, uz);
+      loadList();
+    } catch (e) { toast((uz ? "Xato: " : "Failed: ") + e.message, "err"); }
+  };
+  loadList();
+}
+
+function shareGuestKey(code, hours, uz) {
+  const text = (uz ? "VoltDrive mehmon kaliti: " : "VoltDrive guest key: ") + code +
+    (uz ? ` (${hours} soat amal qiladi). Ilovada "Mehmon kalitingiz bormi?" orqali kiriting.` : ` (valid ${hours}h). Enter it via "Have a guest key?" in the app.`);
+  if (navigator.share) { navigator.share({ title: "VoltDrive", text }).catch(() => {}); }
+  else if (navigator.clipboard) { navigator.clipboard.writeText(text).then(() => toast(uz ? "Kod nusxalandi ✓" : "Code copied ✓", "ok")); }
+  else { toast(code, "ok"); }
+}
+
+// --- Guest entry: redeem a code with no account, then a minimal control panel ---
+async function openGuestEntry() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase) { toast("API offline"); return; }
+  const m = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:6px;">' + (uz ? "Mehmon kirishi" : "Guest access") + "</div>" +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:16px;">' + (uz ? "Sizga berilgan kalit kodini kiriting." : "Enter the key code you were given.") + "</div>" +
+    '<input id="ge-code" maxlength="8" placeholder="ABCD2345" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:4px;text-transform:uppercase;font-family:\'Sora\';font-weight:800;font-size:22px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;color:#fff;padding:14px;margin-bottom:16px;">' +
+    '<div id="ge-go" class="obtn">' + (uz ? "Davom etish" : "Continue") + "</div>" +
+    '<div id="ge-cancel" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:12px 0 2px;">' + (uz ? "Bekor qilish" : "Cancel") + "</div>"
+  );
+  m.box.querySelector("#ge-cancel").onclick = m.close;
+  m.box.querySelector("#ge-go").onclick = async () => {
+    const code = (m.box.querySelector("#ge-code").value || "").trim().toUpperCase();
+    if (code.length < 6) { toast(uz ? "Kodni kiriting" : "Enter the code"); return; }
+    try {
+      const r = await fetch(`${CFG.apiBase}/v1/guest/redeem`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+      if (!r.ok) throw new Error(uz ? "Yaroqsiz yoki muddati o‘tgan" : "Invalid or expired");
+      const info = await r.json();
+      m.close();
+      guestPanel(code, info, uz);
+    } catch (e) { toast(e.message, "err"); }
+  };
+}
+
+function guestPanel(code, info, uz) {
+  const labels = { unlock: uz ? "Ochish" : "Unlock", lock: uz ? "Yopish" : "Lock", start: uz ? "Yurgizish" : "Start" };
+  const icons = { unlock: "lock-open", lock: "lock", start: "power" };
+  const left = Math.max(0, Math.round((info.expiresAt - Date.now() / 1000) / 3600));
+  const btns = (info.scope || []).map((a) =>
+    '<div data-act="' + a + '" class="obtn" style="margin-top:10px;background:rgba(255,255,255,.06);color:#fff;"><i data-lucide="' + (icons[a] || "circle") + '" style="width:18px;height:18px;margin-right:6px;"></i>' + (labels[a] || a) + "</div>"
+  ).join("");
+  const m = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:2px;">' + (info.vehicleName || "Vehicle") + "</div>" +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:18px;">' + (uz ? "Mehmon kirishi · " : "Guest access · ") + left + (uz ? " soat qoldi" : "h left") + "</div>" +
+    btns +
+    '<div id="gp-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:14px 0 2px;">' + (uz ? "Chiqish" : "Exit") + "</div>"
+  );
+  m.box.querySelector("#gp-close").onclick = m.close;
+  m.box.querySelectorAll("[data-act]").forEach((b) => b.onclick = async () => {
+    const action = b.getAttribute("data-act");
+    try {
+      const r = await fetch(`${CFG.apiBase}/v1/guest/command`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, action }) });
+      if (!r.ok) throw new Error(uz ? "Bajarilmadi" : "Failed");
+      toast(labels[action] + " ✓", "ok");
+      haptic([10, 30, 10]);
+    } catch (e) { toast(e.message, "err"); }
+  });
+}
+
+// --- Geofence (safe zone): centre on the car, set radius, enable ---
+async function openGeofence() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  const vid = curVid();
+  let cur = { enabled: false, lat: 0, lng: 0, radiusM: 300 };
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const r = await fetch(`${CFG.apiBase}/v1/vehicles/${vid}/geofence`, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.ok) cur = await r.json();
+  } catch (e) {}
+  const m = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:6px;">' + (uz ? "Xavfsiz hudud" : "Safe zone") + "</div>" +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:16px;line-height:1.45;">' + (uz ? "Mashina shu hududdan chiqsa, server ogohlantiradi. Markaz — mashinaning hozirgi joyi." : "If the car leaves this area, the server raises an alert. Centred on the car's current location.") + "</div>" +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><span style="color:#fff;font-weight:600;font-size:14px;">' + (uz ? "Yoqilgan" : "Enabled") + '</span><div id="gf-tgl" class="tgl ' + (cur.enabled ? "on" : "off") + '"></div></div>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;"><span style="color:#fff;font-weight:600;font-size:14px;">' + (uz ? "Radius" : "Radius") + '</span><div style="display:flex;align-items:center;gap:12px;"><div id="gf-minus" class="ibtn" style="width:34px;height:34px;font-size:20px;">−</div><span id="gf-rad" style="color:#fff;font-family:\'Sora\';font-weight:700;font-size:16px;min-width:64px;text-align:center;"></span><div id="gf-plus" class="ibtn" style="width:34px;height:34px;font-size:20px;">+</div></div></div>' +
+    '<div id="gf-save" class="obtn">' + (uz ? "Saqlash" : "Save") + "</div>" +
+    '<div id="gf-cancel" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:12px 0 2px;">' + (uz ? "Bekor qilish" : "Cancel") + "</div>"
+  );
+  let radius = cur.radiusM || 300;
+  const radEl = m.box.querySelector("#gf-rad");
+  const fmt = () => radEl.textContent = radius >= 1000 ? (radius / 1000).toFixed(1) + " km" : radius + " m";
+  fmt();
+  const tgl = m.box.querySelector("#gf-tgl");
+  tgl.onclick = () => { tgl.classList.toggle("on"); tgl.classList.toggle("off"); };
+  m.box.querySelector("#gf-minus").onclick = () => { radius = Math.max(100, radius - (radius > 1000 ? 500 : 100)); fmt(); };
+  m.box.querySelector("#gf-plus").onclick = () => { radius = Math.min(20000, radius + (radius >= 1000 ? 500 : 100)); fmt(); };
+  m.box.querySelector("#gf-cancel").onclick = m.close;
+  m.box.querySelector("#gf-save").onclick = async () => {
+    const enabled = tgl.classList.contains("on");
+    let lat = cur.lat, lng = cur.lng;
+    try { // centre on the car's live location
+      const token = await auth.currentUser.getIdToken();
+      const sr = await fetch(`${CFG.apiBase}/v1/vehicles/${vid}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (sr.ok) { const snap = await sr.json(); if (snap.location) { lat = snap.location.lat; lng = snap.location.lng; } }
+      const r = await fetch(`${CFG.apiBase}/v1/vehicles/${vid}/geofence`, {
+        method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ enabled, lat, lng, radiusM: radius }),
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      m.close();
+      const badge = document.getElementById("geo-badge");
+      if (badge) { badge.setAttribute("data-i18n", enabled ? "profile.bio.on" : "profile.bio.off"); App.applyLang(); }
+      toast(enabled ? (uz ? "Xavfsiz hudud yoqildi ✓" : "Safe zone enabled ✓") : (uz ? "O‘chirildi" : "Disabled"), "ok");
+      haptic([10, 40, 12]);
+    } catch (e) { toast((uz ? "Xato: " : "Failed: ") + e.message, "err"); }
+  };
 }
 
 // findCar flashes the lights and sounds the horn so you can spot the car in a

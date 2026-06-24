@@ -250,6 +250,10 @@ body{
     <button class="obtn" id="auth-submit" style="margin-top:22px;"><span id="auth-submit-label">Sign in</span><i data-lucide="arrow-right" style="width:17px;height:17px"></i></button>
     <div id="auth-status" style="text-align:center;font-size:12px;font-weight:600;margin-top:12px;min-height:16px;"></div>
     <div style="text-align:center;color:#86888e;font-size:13px;margin-top:14px;"><span id="auth-toggle-text">Don't have an account?</span> <span style="color:#FF8A3D;font-weight:700;cursor:pointer;" id="auth-toggle">Sign up</span></div>
+    <div style="display:flex;align-items:center;gap:12px;margin:18px 0 0;"><div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div></div>
+    <div onclick="App.openGuestEntry()" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:16px;color:#c8cace;font-weight:700;font-size:13px;cursor:pointer;padding:11px;border-radius:13px;border:1px solid rgba(255,255,255,.1);">
+      <i data-lucide="key-round" style="width:16px;height:16px;color:#FF8A3D"></i><span data-i18n="guest.entry">Have a guest key?</span>
+    </div>
   </div>
 </div>
 
@@ -504,6 +508,7 @@ body{
         <div id="poi-charge" class="map-chip"><i data-lucide="zap" style="width:14px;height:14px"></i><span>Zaryad</span></div>
         <div id="poi-fuel" class="map-chip"><i data-lucide="fuel" style="width:14px;height:14px"></i><span>Benzin</span></div>
         <div class="map-chip" onclick="App.findCar()"><i data-lucide="bell-ring" style="width:14px;height:14px"></i><span data-i18n="map.find">Find car</span></div>
+        <div class="map-chip" onclick="App.panic()" style="color:#ff6a6a;border-color:rgba(255,80,80,.4);"><i data-lucide="siren" style="width:14px;height:14px"></i><span data-i18n="map.panic">Panic</span></div>
         <div id="poi-clear" class="map-chip" style="margin-left:auto;"><i data-lucide="x" style="width:14px;height:14px"></i></div>
       </div>
     </div>
@@ -698,6 +703,16 @@ body{
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.bio">Biometric unlock</div>
         <span id="bio-badge" style="color:#FF8A3D;font-size:12px;font-weight:600;" data-i18n="profile.bio.off">Off</span>
       </div>
+      <div class="prow" onclick="App.openGuestKeys()">
+        <div class="chip sm neu"><i data-lucide="key-round" style="width:16px;height:16px"></i></div>
+        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.guest">Guest keys</div>
+        <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
+      </div>
+      <div class="prow" onclick="App.openGeofence()">
+        <div class="chip sm neu"><i data-lucide="map-pin" style="width:16px;height:16px"></i></div>
+        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.geofence">Safe zone</div>
+        <span id="geo-badge" style="color:#FF8A3D;font-size:12px;font-weight:600;" data-i18n="profile.bio.off">Off</span>
+      </div>
       <div class="prow" onclick="App.go('family')">
         <div class="chip sm neu"><i data-lucide="users" style="width:16px;height:16px"></i></div>
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.family">Family sharing</div>
@@ -865,6 +880,8 @@ const App = {
     'engine.trunk':'Bagaj','engine.lights':'Faralar','engine.horn':'Signal',
     'profile.title':'Profil','profile.premium':'To\'liq masofaviy boshqaruv · ustuvor yordam · 2026 dek. gacha',
     'profile.bio':'Biometrik kirish','profile.bio.off':'O\'chiq','profile.bio.on':'Yoqilgan',
+    'profile.guest':'Mehmon kalitlari','profile.geofence':'Xavfsiz hudud',
+    'guest.entry':'Mehmon kalitingiz bormi?','map.panic':'Trevoga',
     'profile.vehicles':'Mening mashinalarim','profile.security':'Xavfsizlik va PIN',
     'profile.family':'Oilaviy boshqaruv','profile.seat':'O\'rindiq sozlamasi',
     'profile.notif':'Bildirishnomalar','profile.lang':'Til','profile.signout':'Chiqish',
@@ -909,6 +926,8 @@ const App = {
     'engine.trunk':'Багажник','engine.lights':'Фары','engine.horn':'Сигнал',
     'profile.title':'Профиль','profile.premium':'Полное удалённое управление · приоритетная поддержка · до дек. 2026',
     'profile.bio':'Биометрический вход','profile.bio.off':'Выкл','profile.bio.on':'Вкл',
+    'profile.guest':'Гостевые ключи','profile.geofence':'Безопасная зона',
+    'guest.entry':'Есть гостевой ключ?','map.panic':'Тревога',
     'profile.vehicles':'Мои автомобили','profile.security':'Безопасность и PIN',
     'profile.family':'Семейный доступ','profile.seat':'Настройка сиденья',
     'profile.notif':'Уведомления','profile.lang':'Язык','profile.signout':'Выйти',
@@ -1036,6 +1055,10 @@ const App = {
   pickFamilyCar() {},
   findCar() {},
   openSchedule() {},
+  openGuestKeys() {},
+  openGuestEntry() {},
+  openGeofence() {},
+  panic() {},
 
   // Add a vehicle to the garage. Lists supported, backend-seeded cars that
   // aren't in the garage yet (e.g. BYD). New brands beyond these need their
