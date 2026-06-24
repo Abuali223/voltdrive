@@ -1331,40 +1331,90 @@ function warmupPrompt() {
   return new Promise((resolve) => {
     if (!CFG.apiBase) { resolve(); return; } // demo mode: nothing to start
     const uz = window.App?.lang === "uz";
+    let on = !!(window.App && App.engineOn); // reflect the current engine state
+    let idleT = null;
+
     const o = document.createElement("div");
     o.id = "vd-warmup";
     o.style.cssText =
       "position:fixed;inset:0;z-index:10001;background:radial-gradient(120% 80% at 50% -10%,#26272b 0%,#141518 55%,#0b0c0e 100%);" +
-      "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:34px;font-family:'Manrope',system-ui;" +
+      "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:34px;font-family:'Manrope',system-ui;" +
       "animation:scrIn .3s ease;";
     o.innerHTML =
       '<div style="font-family:\'Sora\';font-weight:800;font-size:22px;color:#fff;text-align:center;">' +
       (uz ? "Yo‘lga tayyormisiz?" : "Ready to go?") + "</div>" +
-      '<div style="color:#9a9ca2;font-size:13px;text-align:center;max-width:240px;line-height:1.45;">' +
-      (uz ? "Chiqishdan oldin mashinani qizdirib oling — bir bosishda dvigatel va isitish yoqiladi." :
-            "Warm the car up before you leave — one tap starts the engine and heater.") + "</div>" +
-      '<div id="vd-warmup-btn" style="width:128px;height:128px;border-radius:50%;margin-top:6px;cursor:pointer;' +
-      'background:radial-gradient(circle at 50% 35%,#FF8A2B,#FF4D00);box-shadow:0 0 0 10px rgba(255,90,0,.12),0 18px 40px -8px rgba(255,90,0,.7);' +
-      'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#fff;">' +
-      '<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>' +
-      '<span id="vd-warmup-lbl" style="font-family:\'Sora\';font-weight:700;font-size:12px;">' + (uz ? "Qizdirish" : "Warm up") + "</span></div>" +
-      '<div id="vd-warmup-skip" style="color:#9a9ca2;font-size:14px;font-weight:700;cursor:pointer;margin-top:10px;">' +
-      (uz ? "Keyinroq" : "Skip") + "</div>";
+      '<div style="color:#9a9ca2;font-size:13px;text-align:center;max-width:250px;line-height:1.45;">' +
+      (uz ? "Chiqishdan oldin mashinani qizdirib oling. Tugma dvigatelni yoqadi va o‘chiradi." :
+            "Warm the car up before you leave. The button starts and stops the engine.") + "</div>" +
+      '<div id="vd-warmup-btn" style="width:132px;height:132px;border-radius:50%;margin-top:8px;cursor:pointer;' +
+      'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;transition:all .25s;">' +
+      '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>' +
+      '<span id="vd-warmup-lbl" style="font-family:\'Sora\';font-weight:700;font-size:12px;"></span></div>' +
+      '<div id="vd-warmup-status" style="font-size:12px;font-weight:600;letter-spacing:.3px;min-height:16px;"></div>' +
+      '<div id="vd-warmup-enter" style="margin-top:14px;height:50px;padding:0 30px;border-radius:15px;' +
+      'background:linear-gradient(150deg,#FF8A2B,#FF4D00);color:#fff;font-family:\'Sora\';font-weight:700;font-size:15px;' +
+      'display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;box-shadow:0 14px 28px -8px rgba(255,90,0,.6);">' +
+      (uz ? "Ilovaga kirish" : "Enter app") + "</div>";
     document.body.appendChild(o);
 
-    let done = false;
-    const finish = () => { if (done) return; done = true; o.remove(); resolve(); };
-    o.querySelector("#vd-warmup-skip").addEventListener("click", finish);
-    o.querySelector("#vd-warmup-btn").addEventListener("click", () => {
-      haptic([12, 40, 12]);
-      sendCommand("start");
-      sendCommand("climate", { on: true, targetC: 24 });
-      const lbl = o.querySelector("#vd-warmup-lbl");
-      if (lbl) lbl.textContent = uz ? "Qizdirilmoqda…" : "Warming…";
-      setTimeout(finish, 1400);
+    const btn = o.querySelector("#vd-warmup-btn");
+    const lbl = o.querySelector("#vd-warmup-lbl");
+    const status = o.querySelector("#vd-warmup-status");
+
+    const paint = () => {
+      btn.style.background = on
+        ? "radial-gradient(circle at 50% 35%,#FF8A2B,#FF4D00)"
+        : "radial-gradient(circle at 50% 35%,#222326,#17181b)";
+      btn.style.boxShadow = on
+        ? "0 0 0 10px rgba(255,90,0,.12),0 18px 40px -8px rgba(255,90,0,.7)"
+        : "0 0 0 10px rgba(255,255,255,.04),0 18px 40px -8px rgba(0,0,0,.6)";
+      btn.style.color = on ? "#fff" : "#5a5c62";
+      lbl.textContent = on ? (uz ? "O‘chirish" : "Turn off") : (uz ? "Qizdirish" : "Warm up");
+      status.textContent = on
+        ? (uz ? "Dvigatel ishlayapti · isitish 24°" : "Engine running · heat 24°")
+        : (uz ? "Mashina o‘chiq" : "Engine off");
+      status.style.color = on ? "#FF8A3D" : "#9a9ca2";
+    };
+    paint();
+
+    const cancelIdle = () => { if (idleT) { clearTimeout(idleT); idleT = null; } };
+
+    // Live cabin-temperature feedback while warming (polls the snapshot).
+    let tempT = null;
+    const vid = () => VMAP[App.activeCar?.id] || "voyah-001";
+    const refreshTemp = async () => {
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const r = await fetch(`${CFG.apiBase}/v1/vehicles/${vid()}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) return;
+        const s = await r.json();
+        if (on && s.climate && typeof s.climate.insideC === "number") {
+          status.textContent = (uz ? "Salon " : "Cabin ") + Math.round(s.climate.insideC) + "° → 24°";
+        }
+      } catch (e) {}
+    };
+    const startTemp = () => { stopTemp(); refreshTemp(); tempT = setInterval(refreshTemp, 3000); };
+    const stopTemp = () => { if (tempT) { clearInterval(tempT); tempT = null; } };
+
+    const finish = () => { cancelIdle(); stopTemp(); o.remove(); resolve(); };
+
+    // Power button: toggles the engine. Does NOT leave this screen, so you can
+    // start the heater, watch it warm, then turn it off or enter the app.
+    btn.addEventListener("click", () => {
+      cancelIdle(); // engaging — never auto-jump away mid-use
+      on = !on;
+      haptic(on ? [12, 40, 12] : 18);
+      if (window.App) { App.engineOn = on; setEngineUI(on); }
+      sendCommand(on ? "start" : "stop");
+      if (on) sendCommand("climate", { on: true, targetC: 24 });
+      paint();
+      if (on) startTemp(); else stopTemp();
     });
-    // Auto-dismiss if the user just ignores it.
-    setTimeout(finish, 12000);
+
+    o.querySelector("#vd-warmup-enter").addEventListener("click", finish);
+    if (on) startTemp(); // engine already running when the screen opened
+    // Auto-enter only if the screen is completely untouched.
+    idleT = setTimeout(finish, 15000);
   });
 }
 
