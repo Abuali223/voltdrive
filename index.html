@@ -232,6 +232,14 @@ body{
 <body>
 <div id="phone">
 
+<!-- Boot splash: shown instantly so the sign-in screen never flashes while
+     Firebase resolves the session. Hidden by JS once auth state is known. -->
+<div id="vd-splash" style="position:fixed;inset:0;z-index:9998;background:radial-gradient(120% 80% at 50% -10%,#26272b 0%,#141518 55%,#0b0c0e 100%);display:flex;align-items:center;justify-content:center;transition:opacity .25s;">
+  <div style="width:72px;height:72px;border-radius:22px;background:linear-gradient(150deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;box-shadow:0 14px 30px -8px rgba(255,90,0,.6);">
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="#fff"><path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12l1-8z"/></svg>
+  </div>
+</div>
+
 <!-- ===== SCREEN: AUTH ===== -->
 <div class="screen active" id="s-auth">
   <div class="sb"><span class="sb-t time">19:02</span><span class="sb-i"><i data-lucide="signal" style="width:14px;height:14px"></i><i data-lucide="wifi" style="width:14px;height:14px"></i><i data-lucide="battery-medium" style="width:14px;height:14px"></i></span></div>
@@ -969,6 +977,29 @@ const App = {
     history.back();
   },
 
+  // Enter a screen as the navigation ROOT: clears the back stack so the
+  // hardware Back button can never return to it (used for home after sign-in
+  // and for auth after sign-out — Back must not cross the auth boundary).
+  resetRoot(screen) {
+    const prev = document.getElementById('s-' + this.current);
+    if (prev) prev.classList.remove('active');
+    this.current = screen;
+    const next = document.getElementById('s-' + screen);
+    if (next) next.classList.add('active');
+    this.history = [];
+    history.replaceState({ screen }, '');
+    lucide.createIcons();
+    this.applyLang();
+  },
+
+  // Remove the boot splash (once auth state is resolved).
+  hideSplash() {
+    const s = document.getElementById('vd-splash');
+    if (!s) return;
+    s.style.opacity = '0';
+    setTimeout(() => s.remove(), 280);
+  },
+
   // Called by the popstate handler: show the previous in-app screen.
   _back() {
     if (this.history.length === 0) return false;
@@ -1215,6 +1246,10 @@ const App = {
     let savedLang = null;
     try { savedLang = localStorage.getItem('vd_lang'); } catch (e) {}
     this.setLang(['uz', 'en', 'ru'].includes(savedLang) ? savedLang : 'en');
+    // Safety net: never strand the user on the boot splash if auth resolution
+    // stalls (e.g. config/network issue). The PIN lock sits above the splash,
+    // so revealing underneath here is harmless.
+    setTimeout(() => this.hideSplash(), 7000);
     // Seed a history entry and intercept the Back button.
     history.replaceState({ screen: this.current }, '');
     window.addEventListener('popstate', () => {

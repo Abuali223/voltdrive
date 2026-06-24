@@ -64,6 +64,7 @@ let poiMarkers = [];
 
 if (!CFG.firebase) {
   console.info("VoltDrive: live mode OFF (no config) — running in demo mode.");
+  window.App?.hideSplash?.(); // no auth to resolve — reveal the (demo) UI now
 } else {
   boot();
 }
@@ -95,16 +96,21 @@ function boot() {
           await lockGate(user.uid);
           // Winter convenience: offer a one-tap warm-up before entering.
           await warmupPrompt();
-          if (window.App) App.go("home");
+          // Enter home as the navigation root, then reveal (no auth flash, and
+          // Back can never return to the sign-in screen while signed in).
+          if (window.App) { App.resetRoot("home"); App.hideSplash(); }
         } else {
           hideUser();
           hideLock();
+          // Signed out → auth screen is the root; reveal it.
+          if (window.App) { App.resetRoot("auth"); App.hideSplash(); }
         }
       } catch (e) {
         console.error("authState error:", e);
         authStatus((uzNow() ? "Ichki xato: " : "Internal error: ") + (e?.message || e), true);
         // Don't trap the user on the lock screen if PIN UI failed: go home.
-        if (user && window.App) { hideLock(); App.go("home"); }
+        if (user && window.App) { hideLock(); App.resetRoot("home"); }
+        if (window.App) App.hideSplash();
       }
     });
     console.info("VoltDrive: live mode ON.");
@@ -300,7 +306,7 @@ function wireSignOut() {
       if (unsubscribe) { unsubscribe(); unsubscribe = null; }
       await signOut(auth);
       toast("Chiqdingiz");
-      if (window.App) App.go("auth");
+      if (window.App) App.resetRoot("auth");
     } catch (e) {
       toast("Chiqishda xato: " + (e.code || e.message));
     }
@@ -2368,7 +2374,7 @@ function buildLockOverlay() {
     hideLock();
     if (lockState?.resolve) lockState.resolve(false);
     lockState = null;
-    if (window.App) App.go("auth");
+    if (window.App) App.resetRoot("auth");
   });
 
   // Shake keyframes.
