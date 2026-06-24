@@ -38,6 +38,7 @@ import (
 	"voltdrive/backend/internal/provider/mock"
 	"voltdrive/backend/internal/realtime"
 	"voltdrive/backend/internal/rtdb"
+	"voltdrive/backend/internal/schedule"
 )
 
 func main() {
@@ -103,6 +104,16 @@ func main() {
 		log.Printf("members: Firestore store enabled (project %s)", projectID)
 	}
 
+	// --- Departure timer (daily warm-up) ---
+	var scheduleStore *schedule.Store
+	if projectID != "" {
+		scheduleStore = schedule.NewStore(projectID, gcp.NewTokenSource(
+			"https://www.googleapis.com/auth/datastore",
+		).Token)
+		go runScheduler(scheduleStore, registry)
+		log.Printf("scheduler: departure timer enabled")
+	}
+
 	// --- Real-time telemetry hub ---
 	hub := realtime.NewHub(registry)
 
@@ -163,6 +174,7 @@ func main() {
 		Hub:            hub,
 		Members:        memberStore,
 		Devices:        deviceStore,
+		Schedules:      scheduleStore,
 		FCM:            fcm,
 		AllowedOrigins: origins,
 		RatePerSec:     20,
@@ -192,6 +204,47 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = httpServer.Shutdown(ctx)
+}
+
+// runScheduler checks every minute and, at each vehicle's set local time
+// (Asia/Tashkent = UTC+5), warms the car up: remote start + climate. Works
+// server-side, so it fires even when no app is open. Fires once per minute slot.
+func runScheduler(store *schedule.Store, registry *provider.Registry) {
+	const offset = 5 * time.Hour // Tashkent, no DST
+	fired := map[string]string{}
+	t := time.NewTicker(60 * time.Second)
+	defer t.Stop()
+	for {
+		now := time.Now().UTC().Add(offset)
+		slot := now.Format("2006-01-02 15:04")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		all, err := store.All(ctx)
+		if err == nil {
+			for id, sc := range all {
+				if !sc.Enabled || sc.Hour != now.Hour() || sc.Minute != now.Minute() {
+					continue
+				}
+				if fired[id] == slot {
+					continue // already fired this minute
+				}
+				fired[id] = slot
+				p := registry.For(id)
+				if err := p.RemoteStart(ctx, id); err != nil {
+					log.Printf("scheduler: start %s: %v", id, err)
+				}
+				tC := sc.TargetC
+				if tC == 0 {
+					tC = 24
+				}
+				if err := p.SetClimate(ctx, id, true, float64(tC)); err != nil {
+					log.Printf("scheduler: climate %s: %v", id, err)
+				}
+				log.Printf("scheduler: warmed up %s at %02d:%02d (%d°C)", id, sc.Hour, sc.Minute, tC)
+			}
+		}
+		cancel()
+		<-t.C
+	}
 }
 
 func envOr(key, def string) string {

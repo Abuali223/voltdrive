@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -20,6 +21,7 @@ import (
 	"voltdrive/backend/internal/notify"
 	"voltdrive/backend/internal/provider"
 	"voltdrive/backend/internal/realtime"
+	"voltdrive/backend/internal/schedule"
 )
 
 // Server holds dependencies for the HTTP handlers.
@@ -29,8 +31,9 @@ type Server struct {
 	Perms          auth.Permissions
 	Hub            *realtime.Hub  // optional: real-time telemetry stream
 	Members        *members.Store // optional: family/shared-access management
-	Devices        *devices.Store // optional: FCM device-token registry
-	FCM            *notify.FCM    // optional: push sender (for the test endpoint)
+	Devices        *devices.Store  // optional: FCM device-token registry
+	Schedules      *schedule.Store // optional: departure-timer storage
+	FCM            *notify.FCM     // optional: push sender (for the test endpoint)
 	AllowedOrigins []string       // CORS allowlist (empty = permissive "*")
 	RatePerSec     float64        // per-IP request rate (default 20)
 	RateBurst      float64        // per-IP burst (default 40)
@@ -80,6 +83,12 @@ func (s *Server) Routes() http.Handler {
 		if s.FCM != nil {
 			mux.HandleFunc("POST /v1/devices/test", s.guardUser(s.handleDeviceTest))
 		}
+	}
+
+	// Departure timer (daily warm-up schedule).
+	if s.Schedules != nil {
+		mux.HandleFunc("GET /v1/vehicles/{id}/schedule", s.guard(auth.ActView, s.handleScheduleGet))
+		mux.HandleFunc("PUT /v1/vehicles/{id}/schedule", s.guard(auth.ActStart, s.handleSchedulePut))
 	}
 
 	// Real-time telemetry stream (WebSocket).
@@ -436,6 +445,38 @@ func (s *Server) handleMembersDelete(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 	s.handleMembersList(w, r, user)
+}
+
+func (s *Server) handleScheduleGet(w http.ResponseWriter, r *http.Request, _ auth.User) {
+	sc, err := s.Schedules.Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load schedule")
+		return
+	}
+	writeJSON(w, http.StatusOK, sc)
+}
+
+func (s *Server) handleSchedulePut(w http.ResponseWriter, r *http.Request, user auth.User) {
+	id := r.PathValue("id")
+	var sc schedule.Schedule
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&sc); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if sc.Hour < 0 || sc.Hour > 23 || sc.Minute < 0 || sc.Minute > 59 {
+		writeErr(w, http.StatusBadRequest, "invalid time")
+		return
+	}
+	if sc.TargetC != 0 && (sc.TargetC < 14 || sc.TargetC > 32) {
+		writeErr(w, http.StatusBadRequest, "targetC must be 14-32")
+		return
+	}
+	if err := s.Schedules.Put(r.Context(), id, sc); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not save schedule")
+		return
+	}
+	audit(r, user, id, fmt.Sprintf("schedule:%02d:%02d:%v", sc.Hour, sc.Minute, sc.Enabled), nil)
+	writeJSON(w, http.StatusOK, sc)
 }
 
 // replyState returns the fresh snapshot after a successful command so the

@@ -493,6 +493,8 @@ function wireControls() {
   App.pickFamilyCar = pickFamilyCar;
   // Map → flash lights + honk to locate the car.
   App.findCar = findCar;
+  // Home → departure timer (server-side daily warm-up).
+  App.openSchedule = openSchedule;
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
   const origLights = App.toggleLights.bind(App);
@@ -1563,6 +1565,78 @@ function pickFamilyCar() {
     loadMembers();
     haptic(10);
   }));
+}
+
+// --- Departure timer (server-side daily warm-up) ---
+
+async function openSchedule() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  const vid = VMAP[App.activeCar?.id] || "voyah-001";
+  let cur = { enabled: false, hour: 7, minute: 0, targetC: 24 };
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const r = await fetch(`${CFG.apiBase}/v1/vehicles/${vid}/schedule`, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.ok) cur = await r.json();
+  } catch (e) {}
+
+  const o = document.createElement("div");
+  o.style.cssText = "position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:'Manrope',system-ui;";
+  const close = () => o.remove();
+  o.addEventListener("click", (e) => { if (e.target === o) close(); });
+  const hhmm = String(cur.hour).padStart(2, "0") + ":" + String(cur.minute).padStart(2, "0");
+  const box = document.createElement("div");
+  box.style.cssText = "width:100%;max-width:330px;background:#16171a;border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:20px;animation:scrIn .26s ease;";
+  box.innerHTML =
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:6px;">' + (uz ? "Vaqt bo‘yicha qizdirish" : "Departure timer") + "</div>" +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:16px;line-height:1.45;">' + (uz ? "Har kuni shu vaqtda mashina avtomatik qiziydi (dvigatel + isitish)." : "The car warms up automatically at this time each day (engine + heater).") + "</div>" +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><span style="color:#fff;font-weight:600;font-size:14px;">' + (uz ? "Yoqilgan" : "Enabled") + '</span><div id="sch-tgl" class="tgl ' + (cur.enabled ? "on" : "off") + '"></div></div>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><span style="color:#fff;font-weight:600;font-size:14px;">' + (uz ? "Vaqt" : "Time") + '</span><input id="sch-time" type="time" value="' + hhmm + '" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;color:#fff;padding:8px 12px;font-size:15px;font-family:Manrope;"></div>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;"><span style="color:#fff;font-weight:600;font-size:14px;">' + (uz ? "Harorat" : "Temperature") + '</span><div style="display:flex;align-items:center;gap:12px;"><div id="sch-minus" class="ibtn" style="width:34px;height:34px;font-size:20px;">−</div><span id="sch-temp" style="color:#fff;font-family:\'Sora\';font-weight:700;font-size:17px;min-width:40px;text-align:center;">' + (cur.targetC || 24) + '°</span><div id="sch-plus" class="ibtn" style="width:34px;height:34px;font-size:20px;">+</div></div></div>' +
+    '<div id="sch-save" class="obtn">' + (uz ? "Saqlash" : "Save") + "</div>" +
+    '<div id="sch-cancel" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:12px 0 2px;">' + (uz ? "Bekor qilish" : "Cancel") + "</div>";
+  o.appendChild(box);
+  document.body.appendChild(o);
+  if (window.lucide) lucide.createIcons();
+
+  const tgl = box.querySelector("#sch-tgl");
+  tgl.addEventListener("click", () => { tgl.classList.toggle("on"); tgl.classList.toggle("off"); });
+  let temp = cur.targetC || 24;
+  const tempEl = box.querySelector("#sch-temp");
+  box.querySelector("#sch-minus").addEventListener("click", () => { temp = Math.max(14, temp - 1); tempEl.textContent = temp + "°"; });
+  box.querySelector("#sch-plus").addEventListener("click", () => { temp = Math.min(32, temp + 1); tempEl.textContent = temp + "°"; });
+  box.querySelector("#sch-cancel").addEventListener("click", close);
+  box.querySelector("#sch-save").addEventListener("click", async () => {
+    const [h, m] = (box.querySelector("#sch-time").value || "07:00").split(":").map(Number);
+    const enabled = tgl.classList.contains("on");
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch(`${CFG.apiBase}/v1/vehicles/${vid}/schedule`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ enabled, hour: h, minute: m, targetC: temp }),
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      close();
+      updateScheduleSub({ enabled, hour: h, minute: m });
+      toast(enabled
+        ? (uz ? `Saqlandi · har kuni ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}` : `Saved · daily ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`)
+        : (uz ? "O‘chirildi" : "Disabled"), "ok");
+      haptic([10, 40, 12]);
+    } catch (e) {
+      toast((uz ? "Xato: " : "Failed: ") + e.message, "err");
+    }
+  });
+}
+
+function updateScheduleSub(sc) {
+  const uz = window.App?.lang === "uz";
+  const el = document.getElementById("home-schedule-sub");
+  if (!el) return;
+  el.removeAttribute("data-i18n");
+  el.textContent = sc.enabled
+    ? (uz ? `Har kuni ${String(sc.hour).padStart(2, "0")}:${String(sc.minute).padStart(2, "0")}` : `Daily ${String(sc.hour).padStart(2, "0")}:${String(sc.minute).padStart(2, "0")}`)
+    : (uz ? "O‘chiq" : "Off");
 }
 
 // findCar flashes the lights and sounds the horn so you can spot the car in a
