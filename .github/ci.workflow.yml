@@ -1,0 +1,4 @@
+# NOTE: GitHub blocks pushing files under .github/workflows/ without the
+# `workflow` token scope, so this lives here. To activate CI, move/rename it to
+# .github/workflows/ci.yml via the GitHub UI (or push it with a workflow-scoped token).
+
