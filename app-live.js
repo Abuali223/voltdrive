@@ -58,6 +58,7 @@ let carMarker = null;
 let deviceLoc = null;
 let destMarker = null;
 let routeLine = null;
+let lastRangeKm = 0; // latest live driving range, for the route reach calculator
 let poiMarkers = [];
 
 if (!CFG.firebase) {
@@ -384,6 +385,7 @@ function applyLive(v) {
     setHTML("engine-range", `${e.rangeKm}<span style="font-size:18px;color:#FF7A2E;margin-left:3px">km</span>`);
     set("cs-range", String(e.rangeKm));
     set("cs-engine-range2", String(e.rangeKm)); // Engine tab on the Car-status screen
+    lastRangeKm = e.rangeKm;
   }
   if (hasBatt) {
     setHTML("cs-battery", `${e.batteryLevel}<span style="font-size:12px;color:#7e8086">%</span>`);
@@ -1100,10 +1102,36 @@ async function routeTo(dlat, dlng) {
     if (routeLine) leafletMap.removeLayer(routeLine);
     routeLine = L.geoJSON(rt.geometry, { style: { color: "#FF6A1A", weight: 6, opacity: 0.9 } }).addTo(leafletMap);
     leafletMap.fitBounds(routeLine.getBounds(), { padding: [60, 60] });
-    const km = (rt.distance / 1000).toFixed(1), min = Math.round(rt.duration / 60);
+    const kmNum = rt.distance / 1000;
+    const km = kmNum.toFixed(1), min = Math.round(rt.duration / 60);
     set("map-dist", km + " km");
     set("map-eta", `${km} km · ${min} ${uz ? "daqiqa" : "min"}`, true);
+    showReach(kmNum);
   } catch (_) { toast(uz ? "Yo'l xatosi" : "Route error"); }
+}
+
+// showReach compares the route distance with the live driving range and tells
+// the driver whether the charge will get them there (with a 15% safety buffer).
+function showReach(km) {
+  const uz = window.App?.lang === "uz";
+  const el = document.getElementById("map-stations");
+  if (!lastRangeKm) {
+    if (el) { el.textContent = uz ? "Zaryad ma'lumoti yo'q" : "Range unknown"; el.removeAttribute("data-i18n"); }
+    return;
+  }
+  const after = Math.round(lastRangeKm - km);
+  const ok = lastRangeKm >= km * 1.15; // keep a 15% reserve
+  const msg = ok
+    ? (uz ? `✓ Yetadi · ~${after} km zaxira qoladi` : `✓ Reachable · ~${after} km left`)
+    : (lastRangeKm >= km
+        ? (uz ? `⚠️ Zo'rg'a yetadi · faqat ~${after} km qoladi` : `⚠️ Tight · only ~${after} km spare`)
+        : (uz ? `✕ Yetmaydi · ~${Math.abs(after)} km kam` : `✕ Won't reach · ~${Math.abs(after)} km short`));
+  if (el) {
+    el.textContent = msg;
+    el.removeAttribute("data-i18n");
+    el.style.color = ok ? "#43d684" : (lastRangeKm >= km ? "#FF8A3D" : "#ff5252");
+  }
+  toast(msg, ok ? "ok" : "err");
 }
 
 // Charging / fuel stations near the map centre (Overpass), nearest first.
