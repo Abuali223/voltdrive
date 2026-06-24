@@ -25,6 +25,11 @@ import {
   ref,
   onValue,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+import {
+  getMessaging,
+  getToken,
+  onMessage,
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging.js";
 
 const CFG = window.VOLTDRIVE_CONFIG || {};
 // Map the UI car ids to backend / RTDB vehicle ids.
@@ -480,6 +485,8 @@ function wireControls() {
   App.changePin = changePin;
   // Family sharing → invite a member by email.
   App.inviteMember = inviteMember;
+  // Notifications (profile row) → enable push.
+  App.enableNotifications = enableNotifications;
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
   const origLights = App.toggleLights.bind(App);
@@ -1458,6 +1465,62 @@ async function removeMember(email) {
     toast((uz ? "O‘chirildi: " : "Removed: ") + email, "ok");
   } catch (e) {
     toast((uz ? "Xato: " : "Failed: ") + e.message, "err");
+  }
+}
+
+// --- Push notifications (FCM) ---
+//
+// Requests permission, gets an FCM token via the VAPID key, registers it on
+// the backend (Firestore), and shows foreground messages. Security alerts are
+// sent by the backend hub to every registered device.
+
+let fcmMessaging = null;
+
+async function enableNotifications() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  if (!CFG.vapidKey) { toast(uz ? "VAPID kaliti sozlanmagan" : "VAPID key not configured", "err"); return; }
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+    toast(uz ? "Qurilma push'ni qo‘llab-quvvatlamaydi" : "Push not supported here", "err");
+    return;
+  }
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") {
+      toast(uz ? "Bildirishnomaga ruxsat berilmadi" : "Notification permission denied", "err");
+      return;
+    }
+    const reg = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+    fcmMessaging = getMessaging();
+    const token = await getToken(fcmMessaging, { vapidKey: CFG.vapidKey, serviceWorkerRegistration: reg });
+    if (!token) throw new Error(uz ? "token olinmadi" : "no token");
+
+    const idt = await auth.currentUser.getIdToken();
+    const res = await fetch(`${CFG.apiBase}/v1/devices`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${idt}` },
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+
+    localStorage.setItem("vd_notif", "1");
+    toast(uz ? "Bildirishnomalar yoqildi ✓" : "Notifications enabled ✓", "ok");
+    haptic([10, 40, 12]);
+
+    // Foreground messages → in-app toast.
+    onMessage(fcmMessaging, (p) => {
+      const n = p.notification || {};
+      toast((n.title ? n.title + " — " : "") + (n.body || ""), "ok");
+      haptic([60, 30, 60]);
+    });
+
+    // Round-trip test so the user immediately sees it works.
+    fetch(`${CFG.apiBase}/v1/devices/test`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${idt}` },
+    }).catch(() => {});
+  } catch (e) {
+    toast((uz ? "Xato: " : "Failed: ") + (e?.message || e), "err");
   }
 }
 

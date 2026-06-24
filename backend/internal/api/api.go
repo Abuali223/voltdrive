@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"voltdrive/backend/internal/auth"
+	"voltdrive/backend/internal/devices"
 	"voltdrive/backend/internal/members"
+	"voltdrive/backend/internal/notify"
 	"voltdrive/backend/internal/provider"
 	"voltdrive/backend/internal/realtime"
 )
@@ -27,6 +29,8 @@ type Server struct {
 	Perms          auth.Permissions
 	Hub            *realtime.Hub  // optional: real-time telemetry stream
 	Members        *members.Store // optional: family/shared-access management
+	Devices        *devices.Store // optional: FCM device-token registry
+	FCM            *notify.FCM    // optional: push sender (for the test endpoint)
 	AllowedOrigins []string       // CORS allowlist (empty = permissive "*")
 	RatePerSec     float64        // per-IP request rate (default 20)
 	RateBurst      float64        // per-IP burst (default 40)
@@ -68,6 +72,14 @@ func (s *Server) Routes() http.Handler {
 		mux.HandleFunc("GET /v1/vehicles/{id}/members", s.guard(auth.ActView, s.handleMembersList))
 		mux.HandleFunc("POST /v1/vehicles/{id}/members", s.guard(auth.ActManage, s.handleMembersPut))
 		mux.HandleFunc("DELETE /v1/vehicles/{id}/members", s.guard(auth.ActManage, s.handleMembersDelete))
+	}
+
+	// Push-notification device registration + test (any authenticated user).
+	if s.Devices != nil {
+		mux.HandleFunc("POST /v1/devices", s.guardUser(s.handleDeviceRegister))
+		if s.FCM != nil {
+			mux.HandleFunc("POST /v1/devices/test", s.guardUser(s.handleDeviceTest))
+		}
 	}
 
 	// Real-time telemetry stream (WebSocket).
@@ -140,6 +152,58 @@ func (s *Server) guardStream(action auth.Action, next func(http.ResponseWriter, 
 		}
 		next(w, r, user)
 	}
+}
+
+// guardUser authenticates the caller but does not scope to a vehicle — used by
+// account-level endpoints (device registration).
+func (s *Server) guardUser(next func(http.ResponseWriter, *http.Request, auth.User)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		user, err := s.Verifier.Verify(ctx, bearerHeader(r))
+		if err != nil {
+			writeErr(w, http.StatusUnauthorized, "unauthenticated")
+			return
+		}
+		next(w, r.WithContext(ctx), user)
+	}
+}
+
+func (s *Server) handleDeviceRegister(w http.ResponseWriter, r *http.Request, user auth.User) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil || req.Token == "" {
+		writeErr(w, http.StatusBadRequest, "token required")
+		return
+	}
+	if err := s.Devices.Register(r.Context(), user.UID, req.Token); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not register device")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
+}
+
+func (s *Server) handleDeviceTest(w http.ResponseWriter, r *http.Request, user auth.User) {
+	tokens, err := s.Devices.ListTokens(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load devices")
+		return
+	}
+	uz := r.Header.Get("Accept-Language") == "uz"
+	title := "VoltDrive"
+	body := "Test notification — push is working."
+	if uz {
+		body = "Sinov bildirishnomasi — push ishlayapti."
+	}
+	sent := 0
+	for _, t := range tokens {
+		if _, err := s.FCM.Send(r.Context(), notify.Alert{DeviceToken: t, Title: title, Body: body, Data: map[string]string{"type": "test"}}); err == nil {
+			sent++
+		}
+	}
+	audit(r, user, "-", "device-test", nil)
+	writeJSON(w, http.StatusOK, map[string]int{"sent": sent})
 }
 
 func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request, _ auth.User) {

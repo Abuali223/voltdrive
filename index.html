@@ -692,7 +692,7 @@ body{
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.family">Family sharing</div>
         <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
       </div>
-      <div class="prow">
+      <div class="prow" onclick="App.enableNotifications()">
         <div class="chip sm neu"><i data-lucide="bell" style="width:16px;height:16px"></i></div>
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.notif">Notifications</div>
         <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
@@ -945,6 +945,7 @@ const App = {
   // Base no-ops; app-live.js replaces these with the real flows in live mode.
   changePin() {},
   inviteMember() {},
+  enableNotifications() {},
 
   // Add a vehicle to the garage. Lists supported, backend-seeded cars that
   // aren't in the garage yet (e.g. BYD). New brands beyond these need their

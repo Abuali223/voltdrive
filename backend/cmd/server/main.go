@@ -29,6 +29,7 @@ import (
 
 	"voltdrive/backend/internal/api"
 	"voltdrive/backend/internal/auth"
+	"voltdrive/backend/internal/devices"
 	"voltdrive/backend/internal/gcp"
 	"voltdrive/backend/internal/members"
 	"voltdrive/backend/internal/notify"
@@ -116,19 +117,23 @@ func main() {
 		log.Printf("telemetry: mirroring to RTDB %s", rtdbURL)
 	}
 
-	// FCM security alerts when enabled.
+	// FCM push: device-token registry + security-alert sender, when enabled.
+	var fcm *notify.FCM
+	var deviceStore *devices.Store
 	if os.Getenv("FCM_ENABLED") == "1" && projectID != "" {
 		fcmToken := gcp.NewTokenSource(
 			"https://www.googleapis.com/auth/firebase.messaging",
 		).Token
-		fcm := notify.NewFCM(projectID, fcmToken)
-		// DeviceResolver should read device tokens from Firestore; stubbed empty
-		// here until the devices collection is populated.
-		alerter := notify.NewFCMAlerter(fcm, func(context.Context, string) ([]string, error) {
-			return nil, nil
+		fcm = notify.NewFCM(projectID, fcmToken)
+		deviceStore = devices.NewStore(projectID, gcp.NewTokenSource(
+			"https://www.googleapis.com/auth/datastore",
+		).Token)
+		// Alerts fan out to every registered device (single-owner demo).
+		alerter := notify.NewFCMAlerter(fcm, func(ctx context.Context, _ string) ([]string, error) {
+			return deviceStore.ListTokens(ctx)
 		})
 		hub.WithAlerter(alerter)
-		log.Printf("alerts: FCM enabled")
+		log.Printf("alerts: FCM enabled (Firestore device registry)")
 	}
 
 	hubCtx, hubCancel := context.WithCancel(context.Background())
@@ -157,6 +162,8 @@ func main() {
 		Perms:          perms,
 		Hub:            hub,
 		Members:        memberStore,
+		Devices:        deviceStore,
+		FCM:            fcm,
 		AllowedOrigins: origins,
 		RatePerSec:     20,
 		RateBurst:      40,

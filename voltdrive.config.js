@@ -17,4 +17,6 @@ window.VOLTDRIVE_CONFIG = {
   },
   // Deployed Go backend (Cloud Run).
   apiBase: "https://voltdrive-api-iv6iceq35q-ew.a.run.app",
+  // Web Push (FCM) public VAPID key from Firebase Console → Cloud Messaging.
+  vapidKey: "QvHZLp-mJqsvt5xhhMceAkTIlQVRdzZ0zYFthFKeAXM",
 };
