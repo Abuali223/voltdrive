@@ -213,6 +213,15 @@ body{
 /* toast accent by type */
 #vd-toast.ok{border-left:3px solid #2ecc71;}
 #vd-toast.err{border-left:3px solid #ff5252;}
+/* charge-screen tabs + switchable panels */
+.ctab{flex:1;text-align:center;padding:7px;border-radius:11px;color:#7e8086;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s,color .15s,transform .14s cubic-bezier(.34,1.56,.64,1);}
+.ctab.on{background:rgba(255,106,26,.16);color:#FF8A3D;}
+.ctab:active{transform:scale(.95);}
+.cs-panel{display:none;}
+.cs-panel.on{display:block;animation:scrIn .26s ease;}
+.cs-card{padding:13px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);}
+.cs-lbl{color:#7e8086;font-size:11px;font-weight:600;margin-bottom:8px;}
+.cs-val{font-family:'Sora';font-weight:700;font-size:20px;color:#fff;}
 @media (prefers-reduced-motion: reduce){
   .screen.active{animation:none;}
   .qbtn,.ibtn,.row,.ni,.obtn,.ctrl-btn,.gi,.map-chip,.seat-tab,.prow,.lpill,#power-btn{transition:background .15s,color .15s;}
@@ -374,25 +383,71 @@ body{
     </div>
     <div style="text-align:center;color:#86888e;font-size:12px;font-weight:600;margin-top:10px;" data-i18n="charge.total">Total charge range</div>
     <div style="display:flex;gap:8px;padding:14px 22px 0;">
-      <div style="flex:1;text-align:center;padding:7px;border-radius:11px;background:rgba(255,106,26,.16);color:#FF8A3D;font-size:12px;font-weight:600;" data-i18n="charge.tab1">Car Status</div>
-      <div style="flex:1;text-align:center;padding:7px;border-radius:11px;color:#7e8086;font-size:12px;font-weight:600;" data-i18n="charge.tab2">Engine</div>
-      <div style="flex:1;text-align:center;padding:7px;border-radius:11px;color:#7e8086;font-size:12px;font-weight:600;">Climate</div>
+      <div class="ctab on" onclick="App.chargeTab(this,'car')" data-i18n="charge.tab1">Car Status</div>
+      <div class="ctab" onclick="App.chargeTab(this,'engine')" data-i18n="charge.tab2">Engine</div>
+      <div class="ctab" onclick="App.chargeTab(this,'climate')">Climate</div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 22px 0;">
-      <div style="padding:13px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
-        <div style="color:#7e8086;font-size:11px;font-weight:600;margin-bottom:8px;" data-i18n="charge.battery">Battery</div>
-        <div style="display:flex;align-items:center;gap:8px;"><div style="width:34px;height:20px;border-radius:5px;background:linear-gradient(90deg,#FF8A2B,#FF4D00);position:relative;"><div style="position:absolute;right:-4px;top:6px;width:3px;height:8px;background:#FF4D00;border-radius:0 2px 2px 0"></div></div><div style="font-family:'Sora';font-weight:700;font-size:20px;color:#fff;" id="cs-battery">80<span style="font-size:12px;color:#7e8086">%</span></div></div>
+
+    <!-- panel: car -->
+    <div class="cs-panel on" id="cs-panel-car">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 22px 0;">
+        <div class="cs-card">
+          <div class="cs-lbl" data-i18n="charge.battery">Battery</div>
+          <div style="display:flex;align-items:center;gap:8px;"><div style="width:34px;height:20px;border-radius:5px;background:linear-gradient(90deg,#FF8A2B,#FF4D00);position:relative;"><div style="position:absolute;right:-4px;top:6px;width:3px;height:8px;background:#FF4D00;border-radius:0 2px 2px 0"></div></div><div class="cs-val" id="cs-battery">80<span style="font-size:12px;color:#7e8086">%</span></div></div>
+        </div>
+        <div class="cs-card">
+          <div class="cs-lbl" data-i18n="charge.tyre">Tyre pressure</div>
+          <div style="display:flex;align-items:baseline;gap:4px;"><div class="cs-val" id="cs-tyre">32</div><div style="color:#7e8086;font-size:11px;">PSI · optimal</div></div>
+        </div>
       </div>
-      <div style="padding:13px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
-        <div style="color:#7e8086;font-size:11px;font-weight:600;margin-bottom:8px;" data-i18n="charge.tyre">Tyre pressure</div>
-        <div style="display:flex;align-items:baseline;gap:4px;"><div style="font-family:'Sora';font-weight:700;font-size:20px;color:#fff;" id="cs-tyre">32</div><div style="color:#7e8086;font-size:11px;">PSI · optimal</div></div>
+      <div style="padding:10px 22px 0;">
+        <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
+          <div class="chip sm2"><i data-lucide="leaf" style="width:16px;height:16px"></i></div>
+          <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:13px;" data-i18n="charge.saving">Saving mode</div><div style="color:#7e8086;font-size:11px;" data-i18n="charge.distance" id="cs-odo">Total distance · 20,000 km</div></div>
+          <div class="tgl on" id="saving-tgl" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+        </div>
       </div>
     </div>
-    <div style="padding:10px 22px 0;">
-      <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);">
-        <div class="chip sm2"><i data-lucide="leaf" style="width:16px;height:16px"></i></div>
-        <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:13px;" data-i18n="charge.saving">Saving mode</div><div style="color:#7e8086;font-size:11px;" data-i18n="charge.distance" id="cs-odo">Total distance · 20,000 km</div></div>
-        <div class="tgl on" id="saving-tgl" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+
+    <!-- panel: engine -->
+    <div class="cs-panel" id="cs-panel-engine">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 22px 0;">
+        <div class="cs-card">
+          <div class="cs-lbl" data-i18n="charge.state">Status</div>
+          <div class="cs-val" id="cs-engine-state" style="font-size:17px;">—</div>
+        </div>
+        <div class="cs-card">
+          <div class="cs-lbl" data-i18n="charge.reserve">Range reserve</div>
+          <div style="display:flex;align-items:baseline;gap:4px;"><div class="cs-val" id="cs-engine-range2">—</div><div style="color:#7e8086;font-size:11px;">km</div></div>
+        </div>
+      </div>
+      <div style="padding:10px 22px 0;">
+        <div class="row" onclick="App.go('engine')" style="margin:0">
+          <div class="chip"><i data-lucide="power" style="width:17px;height:17px"></i></div>
+          <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:13px;" data-i18n="charge.engineCtrl">Engine control</div></div>
+          <i data-lucide="chevron-right" style="width:18px;height:18px;color:#6a6c72"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- panel: climate -->
+    <div class="cs-panel" id="cs-panel-climate">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 22px 0;">
+        <div class="cs-card">
+          <div class="cs-lbl" data-i18n="charge.inside">Cabin temp</div>
+          <div style="display:flex;align-items:baseline;gap:4px;"><div class="cs-val" id="cs-cl-inside">—</div><div style="color:#7e8086;font-size:11px;">°C</div></div>
+        </div>
+        <div class="cs-card">
+          <div class="cs-lbl" data-i18n="charge.target">Target</div>
+          <div style="display:flex;align-items:baseline;gap:4px;"><div class="cs-val" id="cs-cl-target">—</div><div style="color:#7e8086;font-size:11px;">°C</div></div>
+        </div>
+      </div>
+      <div style="padding:10px 22px 0;">
+        <div class="row" onclick="App.go('climate')" style="margin:0">
+          <div class="chip"><i data-lucide="thermometer" style="width:17px;height:17px"></i></div>
+          <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:13px;" data-i18n="charge.climateCtrl">Climate control</div></div>
+          <i data-lucide="chevron-right" style="width:18px;height:18px;color:#6a6c72"></i>
+        </div>
       </div>
     </div>
   </div>
@@ -777,6 +832,8 @@ const App = {
     'charge.title':'Mashina holati','charge.total':'Umumiy zaryad masofasi',
     'charge.tab1':'Mashina','charge.tab2':'Dvigatel','charge.battery':'Batareya',
     'charge.tyre':'Shina bosimi','charge.saving':'Tejamkor rejim','charge.distance':'Umumiy masofa · 20,000 km',
+    'charge.state':'Holati','charge.reserve':'Masofa zaxirasi','charge.engineCtrl':'Dvigatelni boshqarish',
+    'charge.inside':'Salon harorati','charge.target':'Maqsad','charge.climateCtrl':'Iqlimni boshqarish',
     'map.eta':'190 km · 100% gacha 19 daqiqa','map.stations':'3 tadan 1 zaryad stansiyasi mavjud',
     'map.go':'Yo\'lga chiqish','seat.title':'O\'rindiq sozlamasi',
     'seat.recline':'Suyanish burchagi · Haydovchi','seat.driver':'HAYDOVCHI',
@@ -837,6 +894,17 @@ const App = {
     lucide.createIcons();
     this.applyLang();
     return true;
+  },
+
+  // Car-status screen: switch between the Car / Engine / Climate panels.
+  chargeTab(el, which) {
+    document.querySelectorAll('#s-charge .ctab').forEach(t => t.classList.remove('on'));
+    if (el) el.classList.add('on');
+    ['car', 'engine', 'climate'].forEach(p => {
+      const panel = document.getElementById('cs-panel-' + p);
+      if (panel) panel.classList.toggle('on', p === which);
+    });
+    lucide.createIcons();
   },
 
   toggleLang() {

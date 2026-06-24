@@ -346,9 +346,12 @@ function applyLive(v) {
   }
 
   // --- Engine state ---
-  if (typeof v.engineOn === "boolean" && App.engineOn !== v.engineOn) {
-    App.engineOn = v.engineOn;
-    setEngineUI(v.engineOn);
+  if (typeof v.engineOn === "boolean") {
+    if (App.engineOn !== v.engineOn) {
+      App.engineOn = v.engineOn;
+      setEngineUI(v.engineOn);
+    }
+    set("cs-engine-state", v.engineOn ? (uz ? "Yoniq" : "Running") : (uz ? "O‘chiq" : "Off"), true);
   }
 
   // --- Energy: range + battery ---
@@ -360,6 +363,7 @@ function applyLive(v) {
     set("home-range", `${e.rangeKm} km` + (uz ? " masofa" : " range"), true);
     setHTML("engine-range", `${e.rangeKm}<span style="font-size:18px;color:#FF7A2E;margin-left:3px">km</span>`);
     set("cs-range", String(e.rangeKm));
+    set("cs-engine-range2", String(e.rangeKm)); // Engine tab on the Car-status screen
   }
   if (hasBatt) {
     setHTML("cs-battery", `${e.batteryLevel}<span style="font-size:12px;color:#7e8086">%</span>`);
@@ -385,6 +389,10 @@ function applyLive(v) {
   if (typeof c.insideC === "number") {
     const t = Math.round(c.insideC);
     set("home-climate-sub", (uz ? "Salon " : "Interior ") + t + "°C", true);
+    set("cs-cl-inside", String(t)); // Climate tab on the Car-status screen
+  }
+  if (typeof c.targetC === "number" && c.targetC > 0) {
+    set("cs-cl-target", String(Math.round(c.targetC)));
   }
   if (typeof c.on === "boolean") {
     climateOn = c.on;
