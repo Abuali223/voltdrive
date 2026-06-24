@@ -771,8 +771,8 @@ body{
     <div class="ibtn org" onclick="App.inviteMember()"><i data-lucide="user-plus" style="width:18px;height:18px"></i></div>
   </div>
   <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
-    <div style="margin:16px 22px 0;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);display:flex;align-items:center;gap:12px;">
-      <div style="width:50px;height:38px;border-radius:11px;overflow:hidden;flex-shrink:0;"><img src="project/cars/voyah.jpg" alt="Voyah" style="width:100%;height:100%;object-fit:cover;object-position:center 32%"></div>
+    <div onclick="App.pickFamilyCar()" style="cursor:pointer;margin:16px 22px 0;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);display:flex;align-items:center;gap:12px;">
+      <div id="family-car-img" style="width:50px;height:38px;border-radius:11px;overflow:hidden;flex-shrink:0;"><img src="project/cars/voyah.jpg" alt="Voyah" style="width:100%;height:100%;object-fit:cover;object-position:center 32%"></div>
       <div style="flex:1"><div style="color:#fff;font-weight:700;font-size:14px;font-family:'Sora';" id="family-car-name">Voyah Free</div><div style="color:#7e8086;font-size:11px;margin-top:2px;" id="family-count" data-i18n="family.shared">Shared with 1 person</div></div>
       <i data-lucide="chevron-down" style="width:18px;height:18px;color:#6a6c72"></i>
     </div>
@@ -970,6 +970,7 @@ const App = {
   inviteMember() {},
   enableNotifications() {},
   clearAlerts() {},
+  pickFamilyCar() {},
 
   // Add a vehicle to the garage. Lists supported, backend-seeded cars that
   // aren't in the garage yet (e.g. BYD). New brands beyond these need their

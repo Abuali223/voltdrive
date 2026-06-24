@@ -489,6 +489,8 @@ function wireControls() {
   App.enableNotifications = enableNotifications;
   // Alerts screen → clear notification history.
   App.clearAlerts = clearAlerts;
+  // Family screen → switch which car's member list is shown.
+  App.pickFamilyCar = pickFamilyCar;
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
   const origLights = App.toggleLights.bind(App);
@@ -1355,6 +1357,8 @@ const ROLE_LABEL = {
 async function loadMembers() {
   if (!CFG.apiBase || !auth?.currentUser) return;
   const uz = window.App?.lang === "uz";
+  // Reflect the active car in the header card.
+  if (App.activeCar) setFamilyCarUI(App.activeCar.name || "—", App.activeCar.img || "");
   // Fill the owner (self) row from the signed-in account.
   const me = auth.currentUser;
   const myName = (me.displayName || (me.email || "").split("@")[0] || "You");
@@ -1491,6 +1495,72 @@ async function removeMember(email) {
   } catch (e) {
     toast((uz ? "Xato: " : "Failed: ") + e.message, "err");
   }
+}
+
+// carsInGarage reads the current vehicles from the garage screen (kept in sync
+// when cars are added).
+function carsInGarage() {
+  return [...document.querySelectorAll("#s-garage .gi")]
+    .map((g) => ({
+      brand: g.dataset.brand || "",
+      name: (g.querySelector("[style*='Sora']")?.textContent || g.dataset.brand || "Car").trim(),
+      img: g.querySelector("img")?.getAttribute("src") || "",
+    }))
+    .filter((c) => c.brand);
+}
+
+const CAR_SVG =
+  '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FF8A3D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>';
+
+function setFamilyCarUI(name, img) {
+  set("family-car-name", name);
+  const wrap = document.getElementById("family-car-img");
+  if (wrap) {
+    wrap.innerHTML = img
+      ? '<img src="' + img + '" alt="" style="width:100%;height:100%;object-fit:cover;object-position:center 32%">'
+      : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#2a2c31,#15161a)">' + CAR_SVG + "</div>";
+  }
+}
+
+// pickFamilyCar lets the owner choose which car's family list to manage.
+function pickFamilyCar() {
+  const uz = window.App?.lang === "uz";
+  const cars = carsInGarage();
+  if (cars.length < 2) {
+    toast(uz ? "Boshqa mashina yo‘q" : "No other vehicle");
+    return;
+  }
+  const o = document.createElement("div");
+  o.style.cssText = "position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:'Manrope',system-ui;";
+  const close = () => o.remove();
+  o.addEventListener("click", (e) => { if (e.target === o) close(); });
+  const active = App.activeCar?.id;
+  const rows = cars.map((c) =>
+    '<div class="vd-car-opt" data-brand="' + c.brand + '" data-name="' + escapeHtml(c.name) + '" data-img="' + c.img + '" style="display:flex;align-items:center;gap:12px;padding:11px;border-radius:14px;background:' + (c.brand === active ? "rgba(255,106,26,.14)" : "rgba(255,255,255,.05)") + ';border:1px solid rgba(255,255,255,.08);cursor:pointer;margin-bottom:9px;">' +
+    '<div style="width:46px;height:34px;border-radius:9px;overflow:hidden;flex-shrink:0;background:linear-gradient(150deg,#2a2c31,#15161a);display:flex;align-items:center;justify-content:center;">' +
+    (c.img ? '<img src="' + c.img + '" style="width:100%;height:100%;object-fit:cover">' : CAR_SVG) + "</div>" +
+    '<div style="flex:1;color:#fff;font-weight:700;font-size:14px;font-family:\'Sora\';">' + escapeHtml(c.name) + "</div>" +
+    (c.brand === active ? '<i data-lucide="check" style="width:18px;height:18px;color:#FF8A3D"></i>' : "") + "</div>"
+  ).join("");
+  const box = document.createElement("div");
+  box.style.cssText = "width:100%;max-width:330px;background:#16171a;border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:20px;animation:scrIn .26s ease;";
+  box.innerHTML =
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:14px;">' + (uz ? "Mashinani tanlang" : "Choose vehicle") + "</div>" +
+    rows +
+    '<div id="vd-car-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:9px;">' + (uz ? "Yopish" : "Close") + "</div>";
+  o.appendChild(box);
+  document.body.appendChild(o);
+  if (window.lucide) lucide.createIcons();
+
+  box.querySelector("#vd-car-close").addEventListener("click", close);
+  box.querySelectorAll(".vd-car-opt").forEach((el) => el.addEventListener("click", () => {
+    const id = el.dataset.brand, name = el.dataset.name, img = el.dataset.img;
+    App.activeCar = { id, name, img, pos: "center 32%", range: App.activeCar?.range || "" };
+    setFamilyCarUI(name, img);
+    close();
+    loadMembers();
+    haptic(10);
+  }));
 }
 
 // --- Push notifications (FCM) ---
