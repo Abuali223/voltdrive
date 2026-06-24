@@ -103,6 +103,21 @@ func (p *Provider) SetClimate(_ context.Context, id string, on bool, targetC flo
 	})
 }
 
+// --- Auxiliary controls ---
+
+func (p *Provider) SetLights(_ context.Context, id string, on bool) error {
+	return p.mutate(id, func(v *vehicle) error { v.snap.LightsOn = on; return nil })
+}
+func (p *Provider) SetTrunk(_ context.Context, id string, open bool) error {
+	return p.mutate(id, func(v *vehicle) error { v.snap.TrunkOpen = open; return nil })
+}
+func (p *Provider) Honk(_ context.Context, id string) error {
+	return p.mutate(id, func(*vehicle) error { return nil })
+}
+func (p *Provider) SetSeat(_ context.Context, id string, _ provider.SeatCmd) error {
+	return p.mutate(id, func(*vehicle) error { return nil })
+}
+
 func (p *Provider) mutate(id string, fn func(*vehicle) error) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()

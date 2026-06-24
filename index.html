@@ -635,7 +635,7 @@ body{
         <i data-lucide="lock" style="width:17px;height:17px"></i>
         <span style="font-size:9px;font-weight:600;" data-i18n="engine.locked">Locked</span>
       </div>
-      <div class="ctrl-btn" onclick="App.go('access')">
+      <div class="ctrl-btn" id="trunk-btn" onclick="App.toggleTrunk(this)">
         <i data-lucide="car-front" style="width:17px;height:17px"></i>
         <span style="font-size:9px;font-weight:600;" data-i18n="engine.trunk">Trunk</span>
       </div>
@@ -643,7 +643,7 @@ body{
         <i data-lucide="lightbulb" style="width:17px;height:17px"></i>
         <span style="font-size:9px;font-weight:600;" data-i18n="engine.lights">Lights</span>
       </div>
-      <div class="ctrl-btn" onclick="">
+      <div class="ctrl-btn" id="horn-btn" onclick="App.honk(this)">
         <i data-lucide="volume-2" style="width:17px;height:17px"></i>
         <span style="font-size:9px;font-weight:600;" data-i18n="engine.horn">Horn</span>
       </div>
@@ -818,6 +818,7 @@ const App = {
   lang: 'en',
   locked: false,
   engineOn: true,
+  trunkOpen: false,
   activeCar: { id:'voyah', name:'Voyah Free', img:'project/cars/voyah.jpg', pos:'center 30%', range:'187 km' },
 
   dict: {
@@ -990,6 +991,17 @@ const App = {
 
   toggleLights(el) {
     el.classList.toggle('lkd');
+  },
+
+  // Trunk + horn. Base versions only flip local UI; app-live.js wraps these
+  // to also send the backend command (and they no-op cleanly in demo mode).
+  toggleTrunk(el) {
+    this.trunkOpen = !this.trunkOpen;
+    if (el) el.classList.toggle('lkd', this.trunkOpen);
+  },
+
+  honk(el) {
+    if (el) { el.classList.add('vd-ok'); setTimeout(() => el.classList.remove('vd-ok'), 440); }
   },
 
   togglePw() {

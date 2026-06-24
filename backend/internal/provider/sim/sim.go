@@ -21,11 +21,12 @@ type Engine struct {
 	brand string
 	mu    sync.RWMutex
 	cars  map[string]*provider.Snapshot
+	seats map[string]map[string]int // vehicleID -> seat -> recline angle
 }
 
 // New creates an Engine for a brand, seeded with the given vehicles.
 func New(brand string, seed []provider.Snapshot) *Engine {
-	e := &Engine{brand: brand, cars: map[string]*provider.Snapshot{}}
+	e := &Engine{brand: brand, cars: map[string]*provider.Snapshot{}, seats: map[string]map[string]int{}}
 	now := time.Now().Unix()
 	for i := range seed {
 		s := seed[i]
@@ -84,6 +85,41 @@ func (e *Engine) SetClimate(_ context.Context, id string, on bool, targetC float
 			s.Climate.TargetC = targetC
 		}
 	})
+}
+
+// --- Auxiliary capabilities (exterior lights, trunk, horn, seat memory) ---
+
+func (e *Engine) SetLights(_ context.Context, id string, on bool) error {
+	return e.mutate(id, func(s *provider.Snapshot) { s.LightsOn = on })
+}
+func (e *Engine) SetTrunk(_ context.Context, id string, open bool) error {
+	return e.mutate(id, func(s *provider.Snapshot) { s.TrunkOpen = open })
+}
+
+// Honk is momentary (no persisted state) — it only validates the vehicle exists.
+func (e *Engine) Honk(_ context.Context, id string) error {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	_, ok := e.cars[id]
+	if !ok {
+		return provider.ErrNotFound
+	}
+	return nil
+}
+
+// SetSeat stores a per-seat recline angle so the position persists across
+// snapshots (a stand-in for the real car's seat-memory feature).
+func (e *Engine) SetSeat(_ context.Context, id string, seat provider.SeatCmd) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if _, ok := e.cars[id]; !ok {
+		return provider.ErrNotFound
+	}
+	if e.seats[id] == nil {
+		e.seats[id] = map[string]int{}
+	}
+	e.seats[id][seat.Seat] = seat.Recline
+	return nil
 }
 
 func (e *Engine) mutate(id string, fn func(*provider.Snapshot)) error {

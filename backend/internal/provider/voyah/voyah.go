@@ -65,3 +65,17 @@ func (a *Adapter) RemoteStop(ctx context.Context, id string) error  { return a.s
 func (a *Adapter) SetClimate(ctx context.Context, id string, on bool, t float64) error {
 	return a.sim.SetClimate(ctx, id, on, t)
 }
+
+// --- Auxiliary controls (delegated to the simulator until the real API is wired) ---
+func (a *Adapter) SetLights(ctx context.Context, id string, on bool) error {
+	return a.sim.SetLights(ctx, id, on)
+}
+func (a *Adapter) SetTrunk(ctx context.Context, id string, open bool) error {
+	return a.sim.SetTrunk(ctx, id, open)
+}
+func (a *Adapter) Honk(ctx context.Context, id string) error {
+	return a.sim.Honk(ctx, id)
+}
+func (a *Adapter) SetSeat(ctx context.Context, id string, seat provider.SeatCmd) error {
+	return a.sim.SetSeat(ctx, id, seat)
+}

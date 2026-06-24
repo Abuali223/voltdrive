@@ -43,6 +43,7 @@ let pollTimer = null;
 let climateTemp = 22;
 let climateOn = false;
 let climateSendT = null;
+let seatSendT = null;
 let seatSel = "driver";
 let seatVals = { driver: 62, passenger: 58, rear: 70 };
 let seatSpin = 0;
@@ -354,6 +355,18 @@ function applyLive(v) {
     set("cs-engine-state", v.engineOn ? (uz ? "Yoniq" : "Running") : (uz ? "O‘chiq" : "Off"), true);
   }
 
+  // --- Lights + trunk (auxiliary state) ---
+  if (typeof v.lightsOn === "boolean") {
+    App.lightsOn = v.lightsOn;
+    const lb = document.getElementById("lights-btn");
+    if (lb) lb.classList.toggle("lkd", v.lightsOn);
+  }
+  if (typeof v.trunkOpen === "boolean") {
+    App.trunkOpen = v.trunkOpen;
+    const tb = document.getElementById("trunk-btn");
+    if (tb) tb.classList.toggle("lkd", v.trunkOpen);
+  }
+
   // --- Energy: range + battery ---
   const e = v.energy || {};
   const hasRange = typeof e.rangeKm === "number";
@@ -460,6 +473,27 @@ function wireControls() {
     origEngine();
     sendCommand(App.engineOn ? "start" : "stop");
   };
+
+  // Lights: local flip (toggles .lkd), then backend with the new state.
+  const origLights = App.toggleLights.bind(App);
+  App.toggleLights = (el) => {
+    origLights(el);
+    sendCommand("lights", { on: el.classList.contains("lkd") });
+  };
+
+  // Trunk: local flip, then backend with the new open/closed state.
+  const origTrunk = App.toggleTrunk.bind(App);
+  App.toggleTrunk = (el) => {
+    origTrunk(el);
+    sendCommand("trunk", { on: !!App.trunkOpen });
+  };
+
+  // Horn: momentary — local pop animation, then fire the backend command.
+  const origHonk = App.honk.bind(App);
+  App.honk = (el) => {
+    origHonk(el);
+    sendCommand("horn");
+  };
 }
 
 // cmdFeedback maps an action to the control element to mark busy + the
@@ -468,12 +502,17 @@ function cmdFeedback(action) {
   const uz = window.App?.lang === "uz";
   const lock = () => document.getElementById("lock-btn");
   const power = () => document.getElementById("power-btn");
+  const byId = (id) => () => document.getElementById(id);
   const M = {
     lock:    [lock,  uz ? "Qulflandi" : "Locked"],
     unlock:  [lock,  uz ? "Ochildi" : "Unlocked"],
     start:   [power, uz ? "Dvigatel yoqildi" : "Engine started"],
     stop:    [power, uz ? "Dvigatel o‘chirildi" : "Engine stopped"],
     climate: [() => null, uz ? "Iqlim yangilandi" : "Climate updated"],
+    lights:  [byId("lights-btn"), uz ? "Faralar" : "Lights"],
+    trunk:   [byId("trunk-btn"),  uz ? "Bagaj" : "Trunk"],
+    horn:    [byId("horn-btn"),   uz ? "Signal berildi" : "Horn"],
+    seat:    [() => null, uz ? "O‘rindiq saqlandi" : "Seat saved"],
   };
   const [getEl, msg] = M[action] || [() => null, uz ? "Bajarildi" : "Done"];
   return { el: getEl(), msg };
@@ -1082,7 +1121,16 @@ function clearRoute() {
 // --- Seat adjustment: reclining seat + per-seat memory + 360° spin ---
 function wireSeat() {
   const byId = (id) => document.getElementById(id);
-  const setA = (a) => { seatVals[seatSel] = Math.max(30, Math.min(120, Math.round(a))); updateSeat(); };
+  const setA = (a) => {
+    seatVals[seatSel] = Math.max(30, Math.min(120, Math.round(a)));
+    updateSeat();
+    // Persist the seat position to the backend (debounced).
+    clearTimeout(seatSendT);
+    seatSendT = setTimeout(
+      () => sendCommand("seat", { seat: seatSel, recline: seatVals[seatSel] }),
+      450
+    );
+  };
 
   const minus = byId("seat-minus"), plus = byId("seat-plus"), slider = byId("seat-slider");
   if (minus) minus.addEventListener("click", () => setA(seatVals[seatSel] - 2));

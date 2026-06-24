@@ -97,6 +97,35 @@ func TestClimateValidation(t *testing.T) {
 	}
 }
 
+func TestAuxCommands(t *testing.T) {
+	h := newTestServer()
+	// Lights on → 200 and reflected in the snapshot.
+	req := httptest.NewRequest("POST", "/v1/vehicles/voyah-001/lights", strings.NewReader(`{"on":true}`))
+	req.Header.Set("Authorization", "Bearer u-ali")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("lights = %d", rec.Code)
+	}
+	var snap provider.Snapshot
+	_ = json.Unmarshal(rec.Body.Bytes(), &snap)
+	if !snap.LightsOn {
+		t.Fatalf("lightsOn = false, want true")
+	}
+	// Horn → 200 (momentary, no state).
+	if rec := do(t, h, "POST", "/v1/vehicles/voyah-001/horn", "u-ali"); rec.Code != 200 {
+		t.Fatalf("horn = %d", rec.Code)
+	}
+	// Seat out-of-range → 400.
+	req2 := httptest.NewRequest("POST", "/v1/vehicles/voyah-001/seat", strings.NewReader(`{"seat":"driver","recline":999}`))
+	req2.Header.Set("Authorization", "Bearer u-ali")
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusBadRequest {
+		t.Fatalf("seat out-of-range = %d, want 400", rec2.Code)
+	}
+}
+
 func TestCORSAllowlist(t *testing.T) {
 	s := &Server{
 		Registry:       provider.NewRegistry(mock.New()),

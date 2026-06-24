@@ -67,6 +67,8 @@ type Snapshot struct {
 	Online    bool         `json:"online"`
 	Lock      LockState    `json:"lock"`
 	EngineOn  bool         `json:"engineOn"`
+	LightsOn  bool         `json:"lightsOn"`
+	TrunkOpen bool         `json:"trunkOpen"`
 	Energy    EnergyState  `json:"energy"`
 	Climate   ClimateState `json:"climate"`
 	Location  Location     `json:"location"`
@@ -93,4 +95,21 @@ type VehicleProvider interface {
 
 	// Climate control: on/off with a target temperature in Celsius.
 	SetClimate(ctx context.Context, vehicleID string, on bool, targetC float64) error
+}
+
+// SeatCmd describes a seat adjustment request.
+type SeatCmd struct {
+	Seat    string `json:"seat"`    // "driver" | "passenger" | "rear"
+	Recline int    `json:"recline"` // recline angle in degrees
+}
+
+// Auxiliary is an OPTIONAL capability set for secondary controls (exterior
+// lights, trunk, horn, seat memory). Providers that support these implement
+// it; the API returns 501 (ErrUnsupported) for providers that don't, so the
+// core VehicleProvider contract stays small and every brand still compiles.
+type Auxiliary interface {
+	SetLights(ctx context.Context, vehicleID string, on bool) error
+	SetTrunk(ctx context.Context, vehicleID string, open bool) error
+	Honk(ctx context.Context, vehicleID string) error
+	SetSeat(ctx context.Context, vehicleID string, seat SeatCmd) error
 }

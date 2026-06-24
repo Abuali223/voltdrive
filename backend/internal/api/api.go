@@ -54,6 +54,13 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/vehicles/{id}/stop", s.guard(auth.ActStart, s.cmd("stop")))
 	mux.HandleFunc("POST /v1/vehicles/{id}/climate", s.guard(auth.ActClimate, s.handleClimate))
 
+	// Auxiliary controls (lights, trunk, horn, seat). Providers that don't
+	// implement provider.Auxiliary return 501 (not supported).
+	mux.HandleFunc("POST /v1/vehicles/{id}/lights", s.guard(auth.ActStart, s.handleLights))
+	mux.HandleFunc("POST /v1/vehicles/{id}/trunk", s.guard(auth.ActLock, s.handleTrunk))
+	mux.HandleFunc("POST /v1/vehicles/{id}/horn", s.guard(auth.ActStart, s.handleHorn))
+	mux.HandleFunc("POST /v1/vehicles/{id}/seat", s.guard(auth.ActClimate, s.handleSeat))
+
 	// Real-time telemetry stream (WebSocket).
 	if s.Hub != nil {
 		mux.HandleFunc("GET /v1/vehicles/{id}/stream", s.guardStream(auth.ActView, s.handleStream))
@@ -202,6 +209,100 @@ func (s *Server) handleClimate(w http.ResponseWriter, r *http.Request, user auth
 		return
 	}
 	s.replyState(w, r, id)
+}
+
+type onReq struct {
+	On bool `json:"on"`
+}
+
+// aux returns the provider's optional Auxiliary capability, or false if the
+// brand doesn't support secondary controls.
+func (s *Server) aux(id string) (provider.Auxiliary, bool) {
+	a, ok := s.Registry.For(id).(provider.Auxiliary)
+	return a, ok
+}
+
+func (s *Server) handleLights(w http.ResponseWriter, r *http.Request, user auth.User) {
+	id := r.PathValue("id")
+	var req onReq
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	a, ok := s.aux(id)
+	if !ok {
+		writeProviderErr(w, provider.ErrUnsupported)
+		return
+	}
+	err := a.SetLights(r.Context(), id, req.On)
+	audit(r, user, id, "lights", err)
+	if err != nil {
+		writeProviderErr(w, err)
+		return
+	}
+	s.replyState(w, r, id)
+}
+
+func (s *Server) handleTrunk(w http.ResponseWriter, r *http.Request, user auth.User) {
+	id := r.PathValue("id")
+	var req onReq
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	a, ok := s.aux(id)
+	if !ok {
+		writeProviderErr(w, provider.ErrUnsupported)
+		return
+	}
+	err := a.SetTrunk(r.Context(), id, req.On)
+	audit(r, user, id, "trunk", err)
+	if err != nil {
+		writeProviderErr(w, err)
+		return
+	}
+	s.replyState(w, r, id)
+}
+
+func (s *Server) handleHorn(w http.ResponseWriter, r *http.Request, user auth.User) {
+	id := r.PathValue("id")
+	a, ok := s.aux(id)
+	if !ok {
+		writeProviderErr(w, provider.ErrUnsupported)
+		return
+	}
+	err := a.Honk(r.Context(), id)
+	audit(r, user, id, "horn", err)
+	if err != nil {
+		writeProviderErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
+}
+
+func (s *Server) handleSeat(w http.ResponseWriter, r *http.Request, user auth.User) {
+	id := r.PathValue("id")
+	var seat provider.SeatCmd
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&seat); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if seat.Recline < 0 || seat.Recline > 180 {
+		writeErr(w, http.StatusBadRequest, "recline must be between 0 and 180")
+		return
+	}
+	a, ok := s.aux(id)
+	if !ok {
+		writeProviderErr(w, provider.ErrUnsupported)
+		return
+	}
+	err := a.SetSeat(r.Context(), id, seat)
+	audit(r, user, id, "seat", err)
+	if err != nil {
+		writeProviderErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
 }
 
 // replyState returns the fresh snapshot after a successful command so the
