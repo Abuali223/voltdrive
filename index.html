@@ -257,7 +257,7 @@ body{
 <div class="screen" id="s-home">
   <div class="sb">
     <span class="sb-t time">19:02</span>
-    <div class="ltgl" onclick="App.toggleLang()"><span class="lpill on" id="en-pill">EN</span><span class="lpill" id="uz-pill">UZ</span></div>
+    <div class="ltgl" onclick="App.toggleLang()"><span class="lpill on" id="en-pill">EN</span><span class="lpill" id="uz-pill">UZ</span><span class="lpill" id="ru-pill">RU</span></div>
   </div>
   <div style="flex:1;overflow-y:auto;padding:14px 22px 90px;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -693,6 +693,11 @@ body{
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.security">Security &amp; PIN</div>
         <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
       </div>
+      <div class="prow" onclick="App.toggleBiometric()">
+        <div class="chip sm neu"><i data-lucide="fingerprint" style="width:16px;height:16px"></i></div>
+        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.bio">Biometric unlock</div>
+        <span id="bio-badge" style="color:#FF8A3D;font-size:12px;font-weight:600;" data-i18n="profile.bio.off">Off</span>
+      </div>
       <div class="prow" onclick="App.go('family')">
         <div class="chip sm neu"><i data-lucide="users" style="width:16px;height:16px"></i></div>
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.family">Family sharing</div>
@@ -859,6 +864,7 @@ const App = {
     'engine.tap':'Dvigatelni yoqish/o\'chirish','engine.locked':'Yopiq',
     'engine.trunk':'Bagaj','engine.lights':'Faralar','engine.horn':'Signal',
     'profile.title':'Profil','profile.premium':'To\'liq masofaviy boshqaruv · ustuvor yordam · 2026 dek. gacha',
+    'profile.bio':'Biometrik kirish','profile.bio.off':'O\'chiq','profile.bio.on':'Yoqilgan',
     'profile.vehicles':'Mening mashinalarim','profile.security':'Xavfsizlik va PIN',
     'profile.family':'Oilaviy boshqaruv','profile.seat':'O\'rindiq sozlamasi',
     'profile.notif':'Bildirishnomalar','profile.lang':'Til','profile.signout':'Chiqish',
@@ -873,6 +879,50 @@ const App = {
     'family.limited':'Cheklangan','family.invite':'Gmail orqali taklif qilish',
     'lbl.home':'Bosh sahifa',
     'alerts.title':'Bildirishnomalar','alerts.empty':'Hozircha bildirishnoma yo\'q'
+  },
+
+  // Russian UI strings (parallel to the Uzbek `dict`). Transient toasts still
+  // fall back to English for now; every screen/label renders in Russian.
+  dictRU: {
+    'auth.title':'Создать аккаунт','auth.sub':'Безопасно управляйте автомобилями из любой точки',
+    'auth.google':'Продолжить с Gmail','auth.or':'или','auth.signup':'Создать аккаунт',
+    'auth.have':'Уже есть аккаунт?','auth.signin':'Войти',
+    'home.range':'187 км запас хода','home.control':'Управление','home.control.sub':'Максимальный контроль',
+    'home.climate':'Климат','home.climate.sub':'Салон 20°C','home.location':'Местоположение',
+    'home.seat':'Настройка сиденья','home.seat.sub':'Водитель · память','home.loc.wait':'Определение…',
+    'home.schedule':'Таймер прогрева','home.schedule.sub':'Автопрогрев',
+    'climate.title':'Климат','climate.optimal':'Оптимально · 30%','climate.fan':'Вентилятор',
+    'climate.heat':'Обогрев','climate.seat':'Обогрев сиденья','climate.defrost':'Обдув стёкол',
+    'charge.title':'Состояние авто','charge.total':'Общий запас хода',
+    'charge.tab1':'Авто','charge.tab2':'Двигатель','charge.battery':'Батарея',
+    'charge.tyre':'Давление в шинах','charge.saving':'Режим экономии','charge.distance':'Общий пробег · 20,000 км',
+    'charge.state':'Состояние','charge.reserve':'Запас хода','charge.engineCtrl':'Управление двигателем',
+    'charge.inside':'Температура салона','charge.target':'Цель','charge.climateCtrl':'Управление климатом',
+    'map.eta':'190 км · 19 мин до 100%','map.stations':'Доступна 1 из 3 зарядных станций','map.find':'Найти авто',
+    'map.go':'Поехали','seat.title':'Настройка сиденья',
+    'seat.recline':'Угол наклона · Водитель','seat.driver':'ВОДИТЕЛЬ',
+    'seat.passenger':'ПАССАЖИР','seat.rear':'ЗАДНЕЕ',
+    'garage.title':'Мой гараж','garage.sub':'3 автомобиля подключено',
+    'garage.search':'Поиск автомобиля…','garage.active':'АКТИВНО','garage.add':'Добавить автомобиль',
+    'engine.hello':'Добро пожаловать','engine.range':'Запас хода',
+    'engine.tap':'Запуск/остановка двигателя','engine.locked':'Заблокировано',
+    'engine.trunk':'Багажник','engine.lights':'Фары','engine.horn':'Сигнал',
+    'profile.title':'Профиль','profile.premium':'Полное удалённое управление · приоритетная поддержка · до дек. 2026',
+    'profile.bio':'Биометрический вход','profile.bio.off':'Выкл','profile.bio.on':'Вкл',
+    'profile.vehicles':'Мои автомобили','profile.security':'Безопасность и PIN',
+    'profile.family':'Семейный доступ','profile.seat':'Настройка сиденья',
+    'profile.notif':'Уведомления','profile.lang':'Язык','profile.signout':'Выйти',
+    'access.title':'Умный доступ','access.unlocked':'Двери открыты',
+    'access.near':'Телефон обнаружен рядом','access.auto':'Автооткрытие при приближении',
+    'access.autosub':'Откроется при приближении','access.walk':'Автоблокировка при отдалении',
+    'access.walksub':'Заблокируется когда уйдёте',
+    'family.title':'Семейный доступ','family.shared':'Доступ для 3 человек',
+    'family.members':'Участники','family.you':'(вы)','family.full':'Полный доступ',
+    'family.owner':'Владелец','family.drivesub':'Вождение · замок · климат',
+    'family.driver':'Водитель','family.limsub':'Местоположение · только замок',
+    'family.limited':'Ограниченный','family.invite':'Пригласить через Gmail',
+    'lbl.home':'Главная',
+    'alerts.title':'Уведомления','alerts.empty':'Пока нет уведомлений'
   },
 
   origEN: {},
@@ -924,25 +974,30 @@ const App = {
   },
 
   toggleLang() {
-    this.setLang(this.lang === 'en' ? 'uz' : 'en');
+    const order = ['en', 'uz', 'ru'];
+    this.setLang(order[(order.indexOf(this.lang) + 1) % order.length]);
   },
 
   setLang(lang) {
     this.lang = lang;
     try { localStorage.setItem('vd_lang', lang); } catch (e) {}
-    const en = document.getElementById('en-pill'), uz = document.getElementById('uz-pill');
-    if (en) en.classList.toggle('on', lang === 'en');
-    if (uz) uz.classList.toggle('on', lang === 'uz');
+    ['en', 'uz', 'ru'].forEach(l => {
+      const pill = document.getElementById(l + '-pill');
+      if (pill) pill.classList.toggle('on', lang === l);
+    });
     const badge = document.getElementById('lang-badge');
-    if (badge) badge.textContent = lang === 'en' ? 'EN · UZ' : 'UZ · EN';
+    const names = { en: 'English', uz: 'O‘zbekcha', ru: 'Русский' };
+    if (badge) badge.textContent = names[lang] || 'English';
+    if (document.documentElement) document.documentElement.lang = lang;
     this.applyLang();
   },
 
   applyLang() {
+    const tbl = this.lang === 'uz' ? this.dict : this.lang === 'ru' ? this.dictRU : null;
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
       if (!this.origEN[key]) this.origEN[key] = el.textContent.trim() || el.textContent;
-      el.textContent = (this.lang === 'uz' && this.dict[key]) ? this.dict[key] : (this.origEN[key] || el.textContent);
+      el.textContent = (tbl && tbl[key]) ? tbl[key] : (this.origEN[key] || el.textContent);
     });
   },
 
@@ -974,6 +1029,7 @@ const App = {
 
   // Base no-ops; app-live.js replaces these with the real flows in live mode.
   changePin() {},
+  toggleBiometric() {},
   inviteMember() {},
   enableNotifications() {},
   clearAlerts() {},
@@ -1134,7 +1190,7 @@ const App = {
     // Restore the saved language (defaults to English on first run).
     let savedLang = null;
     try { savedLang = localStorage.getItem('vd_lang'); } catch (e) {}
-    this.setLang(savedLang === 'uz' || savedLang === 'en' ? savedLang : 'en');
+    this.setLang(['uz', 'en', 'ru'].includes(savedLang) ? savedLang : 'en');
     // Seed a history entry and intercept the Back button.
     history.replaceState({ screen: this.current }, '');
     window.addEventListener('popstate', () => {

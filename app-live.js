@@ -485,6 +485,7 @@ function wireControls() {
 
   // Security & PIN (profile row) → change the 4-digit PIN.
   App.changePin = changePin;
+  App.toggleBiometric = toggleBiometric;
   // Family sharing → invite a member by email.
   App.inviteMember = inviteMember;
   // Notifications (profile row) → enable push.
@@ -1916,6 +1917,8 @@ function changePin() {
   const u = auth?.currentUser;
   if (!u) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
   buildLockOverlay();
+  const bioBtn = document.getElementById("vd-lock-bio");
+  if (bioBtn) bioBtn.style.display = "none"; // no biometrics during PIN setup
   lockState = {
     uid: u.uid,
     key: "vd_pin_" + u.uid,
@@ -1925,6 +1928,115 @@ function changePin() {
   setLockTitle(uz ? "Yangi PIN yarating" : "Create a new PIN");
   updateDots();
   showLock();
+}
+
+// --- Biometric unlock (WebAuthn platform authenticator) ---
+//
+// Registers a platform credential (Face ID / fingerprint) tied to this device
+// and offers it as a faster alternative to the PIN on the lock screen. There is
+// no server to verify the signature, so this is a device-side presence gate:
+// the OS performs user-verification with the registered credential, and we
+// treat a successful ceremony as "unlocked". The PIN stays as the fallback.
+
+function bioSupported() {
+  return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+}
+
+function b64urlFromBuf(buf) {
+  let s = "";
+  const b = new Uint8Array(buf);
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function bufFromB64url(str) {
+  const s = str.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(s + "===".slice((s.length + 3) % 4));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+
+async function bioRegister(uid) {
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  const cred = await navigator.credentials.create({
+    publicKey: {
+      challenge,
+      rp: { name: "VoltDrive", id: location.hostname },
+      user: { id: new TextEncoder().encode(uid), name: "voltdrive", displayName: "VoltDrive" },
+      pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "preferred" },
+      timeout: 60000,
+      attestation: "none",
+    },
+  });
+  localStorage.setItem("vd_bio_" + uid, b64urlFromBuf(cred.rawId));
+  return true;
+}
+
+async function bioVerify(uid) {
+  const id = localStorage.getItem("vd_bio_" + uid);
+  if (!id) return false;
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  await navigator.credentials.get({
+    publicKey: {
+      challenge,
+      allowCredentials: [{ type: "public-key", id: bufFromB64url(id) }],
+      userVerification: "required",
+      rpId: location.hostname,
+      timeout: 60000,
+    },
+  });
+  return true; // resolves only after a successful on-device user-verification
+}
+
+function updateBioBadge(uid) {
+  const el = document.getElementById("bio-badge");
+  if (!el) return;
+  const on = !!localStorage.getItem("vd_bio_" + uid);
+  el.setAttribute("data-i18n", on ? "profile.bio.on" : "profile.bio.off");
+  if (window.App) App.applyLang();
+}
+
+async function toggleBiometric() {
+  const uz = window.App?.lang === "uz";
+  const u = auth?.currentUser;
+  if (!u) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  if (!bioSupported()) { toast(uz ? "Qurilma biometrikani qo'llab-quvvatlamaydi" : "This device has no biometrics"); return; }
+  const key = "vd_bio_" + u.uid;
+  if (localStorage.getItem(key)) {
+    localStorage.removeItem(key);
+    updateBioBadge(u.uid);
+    toast(uz ? "Biometrik kirish o'chirildi" : "Biometric unlock disabled");
+    return;
+  }
+  try {
+    await bioRegister(u.uid);
+    updateBioBadge(u.uid);
+    toast(uz ? "Biometrik kirish yoqildi ✓" : "Biometric unlock enabled ✓", "ok");
+    haptic([10, 40, 12]);
+  } catch (e) {
+    toast(uz ? "Yoqib bo'lmadi" : "Couldn't enable biometrics");
+  }
+}
+
+// Offer biometric on the unlock screen and auto-prompt once.
+function maybeOfferBio(uid, hasPin) {
+  const btn = document.getElementById("vd-lock-bio");
+  if (!btn) return;
+  const ready = hasPin && bioSupported() && localStorage.getItem("vd_bio_" + uid);
+  btn.style.display = ready ? "flex" : "none";
+  if (ready) setTimeout(tryBioUnlock, 350);
+}
+
+async function tryBioUnlock() {
+  if (!lockState || lockState.mode !== "unlock") return;
+  const uz = window.App?.lang === "uz";
+  try {
+    if (await bioVerify(lockState.uid)) finishUnlock();
+  } catch (e) {
+    toast(uz ? "Biometrika bekor qilindi — PIN kiriting" : "Biometric cancelled — enter PIN");
+  }
 }
 
 // --- PIN lock (security gate on every app open) ---
@@ -1954,6 +2066,8 @@ function lockGate(uid) {
                         : (uz ? "Yangi PIN yarating" : "Create a 4-digit PIN"));
     updateDots();
     showLock();
+    maybeOfferBio(uid, !!stored);
+    updateBioBadge(uid);
   });
 }
 
@@ -1971,6 +2085,9 @@ function buildLockOverlay() {
     '<div id="vd-lock-title" style="font-family:\'Sora\';font-weight:800;font-size:21px;color:#fff;text-align:center;"></div>' +
     '<div id="vd-lock-dots" style="display:flex;gap:16px;margin:4px 0;"></div>' +
     '<div id="vd-lock-pad" style="display:grid;grid-template-columns:repeat(3,72px);gap:18px;"></div>' +
+    '<div id="vd-lock-bio" style="display:none;align-items:center;gap:8px;color:#fff;font-weight:700;font-size:14px;cursor:pointer;padding:10px 18px;border-radius:14px;background:rgba(255,255,255,.06);margin-top:2px;">' +
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF8A3D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10v4"/><path d="M12 2a10 10 0 0 0-10 10"/><path d="M22 12A10 10 0 0 0 12 2"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M9 18.5a4 4 0 0 1-.36-2.5"/><path d="M12 12a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/></svg>' +
+    '<span>' + (uz ? "Biometrika bilan ochish" : "Unlock with biometrics") + "</span></div>" +
     '<div id="vd-lock-out" style="color:#FF8A3D;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px;">' +
     (uz ? "Boshqa akkaunt / Chiqish" : "Use another account / Sign out") + "</div>";
   document.body.appendChild(o);
@@ -1989,6 +2106,9 @@ function buildLockOverlay() {
     btn.addEventListener("click", () => onPinKey(k));
     pad.appendChild(btn);
   });
+
+  // Biometric unlock button.
+  o.querySelector("#vd-lock-bio").addEventListener("click", tryBioUnlock);
 
   // Sign out from lock screen.
   o.querySelector("#vd-lock-out").addEventListener("click", async () => {
