@@ -768,33 +768,23 @@ body{
   <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 22px 0;flex-shrink:0;">
     <div class="ibtn" onclick="App.back()"><i data-lucide="chevron-left" style="width:18px;height:18px"></i></div>
     <div style="font-family:'Sora';font-weight:700;font-size:16px;color:#fff;" data-i18n="family.title">Family Sharing</div>
-    <div class="ibtn org"><i data-lucide="user-plus" style="width:18px;height:18px"></i></div>
+    <div class="ibtn org" onclick="App.inviteMember()"><i data-lucide="user-plus" style="width:18px;height:18px"></i></div>
   </div>
   <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
     <div style="margin:16px 22px 0;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);display:flex;align-items:center;gap:12px;">
       <div style="width:50px;height:38px;border-radius:11px;overflow:hidden;flex-shrink:0;"><img src="project/cars/voyah.jpg" alt="Voyah" style="width:100%;height:100%;object-fit:cover;object-position:center 32%"></div>
-      <div style="flex:1"><div style="color:#fff;font-weight:700;font-size:14px;font-family:'Sora';" id="family-car-name">Voyah Free</div><div style="color:#7e8086;font-size:11px;margin-top:2px;" data-i18n="family.shared">Shared with 3 people</div></div>
+      <div style="flex:1"><div style="color:#fff;font-weight:700;font-size:14px;font-family:'Sora';" id="family-car-name">Voyah Free</div><div style="color:#7e8086;font-size:11px;margin-top:2px;" id="family-count" data-i18n="family.shared">Shared with 1 person</div></div>
       <i data-lucide="chevron-down" style="width:18px;height:18px;color:#6a6c72"></i>
     </div>
     <div style="color:#7e8086;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin:18px 22px 0;" data-i18n="family.members">Members</div>
-    <div style="padding:10px 22px 0;display:flex;flex-direction:column;gap:10px;">
+    <div id="family-members" style="padding:10px 22px 0;display:flex;flex-direction:column;gap:10px;">
       <div style="display:flex;align-items:center;gap:12px;">
-        <div class="av org">MK</div>
+        <div class="av org" id="family-self-av">S</div>
         <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:14px;"><span id="family-self">You</span> <span style="color:#7e8086;font-weight:500;font-size:12px;" data-i18n="family.you">(you)</span></div><div style="color:#7e8086;font-size:11px;" data-i18n="family.full">Full access</div></div>
         <div class="badge org" data-i18n="family.owner">Owner</div>
       </div>
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div class="av">AK</div>
-        <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:14px;">Aziza K.</div><div style="color:#7e8086;font-size:11px;" data-i18n="family.drivesub">Drive · lock · climate</div></div>
-        <div class="badge gry" data-i18n="family.driver">Driver</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div class="av">JK</div>
-        <div style="flex:1"><div style="color:#fff;font-weight:600;font-size:14px;">Javohir K.</div><div style="color:#7e8086;font-size:11px;" data-i18n="family.limsub">Location · lock only</div></div>
-        <div class="badge gry" data-i18n="family.limited">Limited</div>
-      </div>
     </div>
-    <div style="margin:18px 22px 0;" class="dash"><i data-lucide="mail" style="width:16px;height:16px;color:#FF7A2E"></i><span data-i18n="family.invite">Invite via Gmail</span></div>
+    <div style="margin:18px 22px 0;" class="dash" onclick="App.inviteMember()"><i data-lucide="mail" style="width:16px;height:16px;color:#FF7A2E"></i><span data-i18n="family.invite">Invite via Gmail</span></div>
   </div>
   <div class="bnav">
     <div class="ni" onclick="App.go('home')"><i data-lucide="layout-grid" style="width:22px;height:22px"></i></div>
@@ -952,9 +942,9 @@ const App = {
     this.go('home');
   },
 
-  // Base no-op; app-live.js replaces this with the real PIN-change flow in
-  // live mode (so the profile "Security & PIN" row works).
+  // Base no-ops; app-live.js replaces these with the real flows in live mode.
   changePin() {},
+  inviteMember() {},
 
   // Add a vehicle to the garage. Lists supported, backend-seeded cars that
   // aren't in the garage yet (e.g. BYD). New brands beyond these need their

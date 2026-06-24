@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"voltdrive/backend/internal/auth"
+	"voltdrive/backend/internal/members"
 	"voltdrive/backend/internal/provider"
 	"voltdrive/backend/internal/realtime"
 )
@@ -24,10 +25,11 @@ type Server struct {
 	Registry       *provider.Registry
 	Verifier       auth.Verifier
 	Perms          auth.Permissions
-	Hub            *realtime.Hub // optional: real-time telemetry stream
-	AllowedOrigins []string      // CORS allowlist (empty = permissive "*")
-	RatePerSec     float64       // per-IP request rate (default 20)
-	RateBurst      float64       // per-IP burst (default 40)
+	Hub            *realtime.Hub  // optional: real-time telemetry stream
+	Members        *members.Store // optional: family/shared-access management
+	AllowedOrigins []string       // CORS allowlist (empty = permissive "*")
+	RatePerSec     float64        // per-IP request rate (default 20)
+	RateBurst      float64        // per-IP burst (default 40)
 }
 
 // Routes builds the http.Handler with all endpoints registered and the
@@ -60,6 +62,13 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/vehicles/{id}/trunk", s.guard(auth.ActLock, s.handleTrunk))
 	mux.HandleFunc("POST /v1/vehicles/{id}/horn", s.guard(auth.ActStart, s.handleHorn))
 	mux.HandleFunc("POST /v1/vehicles/{id}/seat", s.guard(auth.ActClimate, s.handleSeat))
+
+	// Family / shared-access management (owner only).
+	if s.Members != nil {
+		mux.HandleFunc("GET /v1/vehicles/{id}/members", s.guard(auth.ActView, s.handleMembersList))
+		mux.HandleFunc("POST /v1/vehicles/{id}/members", s.guard(auth.ActManage, s.handleMembersPut))
+		mux.HandleFunc("DELETE /v1/vehicles/{id}/members", s.guard(auth.ActManage, s.handleMembersDelete))
+	}
 
 	// Real-time telemetry stream (WebSocket).
 	if s.Hub != nil {
@@ -303,6 +312,62 @@ func (s *Server) handleSeat(w http.ResponseWriter, r *http.Request, user auth.Us
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
+}
+
+type memberReq struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
+func (s *Server) handleMembersList(w http.ResponseWriter, r *http.Request, _ auth.User) {
+	list, err := s.Members.List(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load members")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"members": list})
+}
+
+func (s *Server) handleMembersPut(w http.ResponseWriter, r *http.Request, user auth.User) {
+	id := r.PathValue("id")
+	var req memberReq
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	if !strings.Contains(req.Email, "@") {
+		writeErr(w, http.StatusBadRequest, "valid email required")
+		return
+	}
+	role := auth.Role(req.Role)
+	if role != auth.RoleDriver && role != auth.RoleGuest && role != auth.RoleOwner {
+		writeErr(w, http.StatusBadRequest, "role must be owner, driver or guest")
+		return
+	}
+	err := s.Members.Put(r.Context(), id, members.Member{Email: req.Email, Role: string(role)})
+	audit(r, user, id, "member-add:"+req.Email+":"+req.Role, err)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not add member")
+		return
+	}
+	s.handleMembersList(w, r, user)
+}
+
+func (s *Server) handleMembersDelete(w http.ResponseWriter, r *http.Request, user auth.User) {
+	id := r.PathValue("id")
+	email := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("email")))
+	if email == "" {
+		writeErr(w, http.StatusBadRequest, "email query param required")
+		return
+	}
+	err := s.Members.Remove(r.Context(), id, email)
+	audit(r, user, id, "member-remove:"+email, err)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not remove member")
+		return
+	}
+	s.handleMembersList(w, r, user)
 }
 
 // replyState returns the fresh snapshot after a successful command so the

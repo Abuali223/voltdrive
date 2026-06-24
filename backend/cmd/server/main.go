@@ -30,6 +30,7 @@ import (
 	"voltdrive/backend/internal/api"
 	"voltdrive/backend/internal/auth"
 	"voltdrive/backend/internal/gcp"
+	"voltdrive/backend/internal/members"
 	"voltdrive/backend/internal/notify"
 	"voltdrive/backend/internal/provider"
 	"voltdrive/backend/internal/provider/brands"
@@ -92,6 +93,15 @@ func main() {
 		log.Printf("auth: DEV mode (no FIREBASE_PROJECT_ID) — do not use in production")
 	}
 
+	// --- Family / shared-access management (Firestore) ---
+	var memberStore *members.Store
+	if projectID != "" {
+		memberStore = members.NewStore(projectID, gcp.NewTokenSource(
+			"https://www.googleapis.com/auth/datastore",
+		).Token)
+		log.Printf("members: Firestore store enabled (project %s)", projectID)
+	}
+
 	// --- Real-time telemetry hub ---
 	hub := realtime.NewHub(registry)
 
@@ -146,6 +156,7 @@ func main() {
 		Verifier:       verifier,
 		Perms:          perms,
 		Hub:            hub,
+		Members:        memberStore,
 		AllowedOrigins: origins,
 		RatePerSec:     20,
 		RateBurst:      40,

@@ -478,6 +478,8 @@ function wireControls() {
 
   // Security & PIN (profile row) → change the 4-digit PIN.
   App.changePin = changePin;
+  // Family sharing → invite a member by email.
+  App.inviteMember = inviteMember;
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
   const origLights = App.toggleLights.bind(App);
@@ -793,6 +795,8 @@ function wireExtras() {
       if (s === "map") ensureMap();
       // Smart Access needs a live GPS fix to measure distance to the car.
       if (s === "access") locateDevice(true);
+      // Family sharing: load the current member list from the backend.
+      if (s === "family") loadMembers();
     };
   }
   if (App.current === "map") ensureMap();
@@ -1322,6 +1326,138 @@ function wireAccess() {
   // If a toggle is already on at startup, begin tracking so it works from home.
   if (tglOn("auto-unlock-tgl") || tglOn("walk-lock-tgl")) {
     setTimeout(() => { try { locateDevice(true); } catch (e) {} }, 1500);
+  }
+}
+
+// --- Family / shared access ---
+//
+// The owner manages who can use the car (driver / guest). The list lives in
+// Firestore via the backend; this renders it, supports inviting by Gmail
+// address and removing members.
+
+const ROLE_LABEL = {
+  owner: { uz: "Egasi", en: "Owner", sub: { uz: "To‘liq kirish", en: "Full access" }, cls: "org" },
+  driver: { uz: "Haydovchi", en: "Driver", sub: { uz: "Haydash · qulf · iqlim", en: "Drive · lock · climate" }, cls: "gry" },
+  guest: { uz: "Cheklangan", en: "Limited", sub: { uz: "Joylashuv · faqat qulf", en: "Location · lock only" }, cls: "gry" },
+};
+
+async function loadMembers() {
+  if (!CFG.apiBase || !auth?.currentUser) return;
+  const uz = window.App?.lang === "uz";
+  // Fill the owner (self) row from the signed-in account.
+  const me = auth.currentUser;
+  const myName = (me.displayName || (me.email || "").split("@")[0] || "You");
+  set("family-self", myName);
+  const av = document.getElementById("family-self-av");
+  if (av) av.textContent = (myName[0] || "U").toUpperCase();
+  try {
+    const token = await me.getIdToken();
+    const vid = VMAP[App.activeCar?.id] || "voyah-001";
+    const res = await fetch(`${CFG.apiBase}/v1/vehicles/${vid}/members`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return;
+    const data = await res.json();
+    renderMembers(data.members || []);
+  } catch (e) { /* offline — keep owner row */ }
+}
+
+function renderMembers(list) {
+  const wrap = document.getElementById("family-members");
+  if (!wrap) return;
+  const uz = window.App?.lang === "uz";
+  // Keep the first child (owner/self row); drop previously rendered members.
+  [...wrap.querySelectorAll("[data-member]")].forEach((el) => el.remove());
+  list.forEach((m) => {
+    const meta = ROLE_LABEL[m.role] || ROLE_LABEL.guest;
+    const initials = (m.email[0] || "?").toUpperCase();
+    const row = document.createElement("div");
+    row.dataset.member = m.email;
+    row.style.cssText = "display:flex;align-items:center;gap:12px;";
+    row.innerHTML =
+      '<div class="av">' + initials + "</div>" +
+      '<div style="flex:1;min-width:0"><div style="color:#fff;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + m.email + "</div>" +
+      '<div style="color:#7e8086;font-size:11px;">' + (uz ? meta.sub.uz : meta.sub.en) + "</div></div>" +
+      '<div class="badge ' + meta.cls + '">' + (uz ? meta.uz : meta.en) + "</div>" +
+      '<div class="vd-rm" style="color:#ff6b6b;cursor:pointer;padding:4px;font-size:18px;line-height:1;">×</div>';
+    row.querySelector(".vd-rm").addEventListener("click", () => removeMember(m.email));
+    wrap.appendChild(row);
+  });
+  const count = document.getElementById("family-count");
+  if (count) {
+    const n = list.length + 1; // + owner
+    count.textContent = uz ? ("Ulashilgan · " + n + " kishi") : ("Shared with " + n + (n === 1 ? " person" : " people"));
+    count.removeAttribute("data-i18n");
+  }
+}
+
+function inviteMember() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  const o = document.createElement("div");
+  o.style.cssText = "position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:'Manrope',system-ui;";
+  const close = () => o.remove();
+  o.addEventListener("click", (e) => { if (e.target === o) close(); });
+  o.innerHTML =
+    '<div style="width:100%;max-width:330px;background:#16171a;border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:20px;animation:scrIn .26s ease;">' +
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:14px;">' + (uz ? "Oilaga taklif" : "Invite to family") + "</div>" +
+    '<input id="vd-inv-email" type="email" inputmode="email" placeholder="email@gmail.com" style="width:100%;height:50px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 14px;font-size:14px;outline:none;margin-bottom:12px;font-family:Manrope;">' +
+    '<div style="display:flex;gap:8px;margin-bottom:16px;" id="vd-inv-roles">' +
+    '<div class="vd-inv-role on" data-role="driver" style="flex:1;text-align:center;padding:11px;border-radius:13px;background:rgba(255,106,26,.16);color:#FF8A3D;font-weight:700;font-size:13px;cursor:pointer;">' + (uz ? "Haydovchi" : "Driver") + "</div>" +
+    '<div class="vd-inv-role" data-role="guest" style="flex:1;text-align:center;padding:11px;border-radius:13px;background:rgba(255,255,255,.05);color:#9a9ca2;font-weight:700;font-size:13px;cursor:pointer;">' + (uz ? "Cheklangan" : "Limited") + "</div></div>" +
+    '<div id="vd-inv-send" style="height:50px;border-radius:15px;background:linear-gradient(150deg,#FF8A2B,#FF4D00);color:#fff;font-family:\'Sora\';font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;">' + (uz ? "Taklif yuborish" : "Send invite") + "</div>" +
+    '<div id="vd-inv-cancel" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:12px 0 2px;">' + (uz ? "Bekor qilish" : "Cancel") + "</div></div>";
+  document.body.appendChild(o);
+
+  let role = "driver";
+  o.querySelectorAll(".vd-inv-role").forEach((el) => el.addEventListener("click", () => {
+    role = el.dataset.role;
+    o.querySelectorAll(".vd-inv-role").forEach((x) => {
+      const on = x === el;
+      x.style.background = on ? "rgba(255,106,26,.16)" : "rgba(255,255,255,.05)";
+      x.style.color = on ? "#FF8A3D" : "#9a9ca2";
+    });
+  }));
+  o.querySelector("#vd-inv-cancel").addEventListener("click", close);
+  o.querySelector("#vd-inv-send").addEventListener("click", async () => {
+    const email = (o.querySelector("#vd-inv-email").value || "").trim().toLowerCase();
+    if (!email.includes("@")) { toast(uz ? "To‘g‘ri email kiriting" : "Enter a valid email", "err"); return; }
+    close();
+    await putMember(email, role);
+  });
+}
+
+async function putMember(email, role) {
+  const uz = window.App?.lang === "uz";
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const vid = VMAP[App.activeCar?.id] || "voyah-001";
+    const res = await fetch(`${CFG.apiBase}/v1/vehicles/${vid}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ email, role }),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    renderMembers((await res.json()).members || []);
+    toast((uz ? "Taklif qilindi: " : "Invited: ") + email, "ok");
+    haptic([10, 40, 12]);
+  } catch (e) {
+    toast((uz ? "Xato: " : "Failed: ") + e.message, "err");
+  }
+}
+
+async function removeMember(email) {
+  const uz = window.App?.lang === "uz";
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const vid = VMAP[App.activeCar?.id] || "voyah-001";
+    const res = await fetch(`${CFG.apiBase}/v1/vehicles/${vid}/members?email=${encodeURIComponent(email)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    renderMembers((await res.json()).members || []);
+    toast((uz ? "O‘chirildi: " : "Removed: ") + email, "ok");
+  } catch (e) {
+    toast((uz ? "Xato: " : "Failed: ") + e.message, "err");
   }
 }
 
