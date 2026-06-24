@@ -43,7 +43,7 @@ func New(cfg Config) *Adapter {
 		Lock: provider.Locked, EngineOn: false,
 		Energy:   provider.EnergyState{BatteryLevel: 78, RangeKm: 187},
 		Climate:  provider.ClimateState{TargetC: 22, InsideC: 19, OutsideC: 14},
-		Location: provider.Location{Lat: 41.311081, Lng: 69.240562, Heading: 90},
+		Location: provider.Location{Lat: 40.7821, Lng: 72.3442, Heading: 90},
 		Health:   provider.Health{OdometerKm: 12480, TirePressures: [4]int{230, 230, 228, 229}, ServiceDueKm: 4500},
 	}}
 	return &Adapter{cfg: cfg, client: &http.Client{Timeout: 20 * time.Second}, sim: sim.New("voyah", seed)}
