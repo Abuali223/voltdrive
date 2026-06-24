@@ -4,10 +4,9 @@
 //	vehicle_members/{vehicleId}/members/{email}
 //	fields: { email, role, addedAt }
 //
-// This is the owner-facing sharing list. Role enforcement on commands is done
-// separately by auth.FirestorePermissions (vehicle_access/{vehicleId}_{uid});
-// when RBAC is open (single-owner demo) this list is informational + ready for
-// enforcement once uid mapping is enabled.
+// This list is both the owner-facing sharing UI AND the source of truth for
+// command enforcement: the API resolves a caller's role via RoleByEmail against
+// the same documents, so adding a member here immediately grants them control.
 package members
 
 import (
@@ -82,9 +81,15 @@ func (s *Store) List(ctx context.Context, vehicleID string) ([]Member, error) {
 	var out struct {
 		Documents []struct {
 			Fields struct {
-				Email   struct{ StringValue string `json:"stringValue"` } `json:"email"`
-				Role    struct{ StringValue string `json:"stringValue"` } `json:"role"`
-				AddedAt struct{ IntegerValue string `json:"integerValue"` } `json:"addedAt"`
+				Email struct {
+					StringValue string `json:"stringValue"`
+				} `json:"email"`
+				Role struct {
+					StringValue string `json:"stringValue"`
+				} `json:"role"`
+				AddedAt struct {
+					IntegerValue string `json:"integerValue"`
+				} `json:"addedAt"`
 			} `json:"fields"`
 		} `json:"documents"`
 	}
@@ -99,6 +104,43 @@ func (s *Store) List(ctx context.Context, vehicleID string) ([]Member, error) {
 	}
 	sort.Slice(members, func(i, j int) bool { return members[i].AddedAt < members[j].AddedAt })
 	return members, nil
+}
+
+// RoleByEmail resolves a shared user's role for a vehicle directly from the
+// sharing list (keyed by the verified email). This is what makes "family
+// sharing" actually grant control: the same document the owner manages is the
+// one enforced on commands — no separate uid mapping required.
+func (s *Store) RoleByEmail(ctx context.Context, vehicleID, email string) (string, bool) {
+	if email == "" {
+		return "", false
+	}
+	urlStr := s.base(vehicleID) + "/" + url.PathEscape(email)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
+	if err != nil {
+		return "", false
+	}
+	if err := s.auth(ctx, req); err != nil {
+		return "", false
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return "", false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", false // 404 -> not a shared member of this vehicle
+	}
+	var doc struct {
+		Fields struct {
+			Role struct {
+				StringValue string `json:"stringValue"`
+			} `json:"role"`
+		} `json:"fields"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
+		return "", false
+	}
+	return doc.Fields.Role.StringValue, doc.Fields.Role.StringValue != ""
 }
 
 // Put adds or updates a member.

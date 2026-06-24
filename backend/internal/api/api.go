@@ -155,7 +155,23 @@ func (s *Server) authorize(ctx context.Context, w http.ResponseWriter, r *http.R
 	if s.OwnerEmail != "" && user.Email != "" && strings.EqualFold(user.Email, s.OwnerEmail) {
 		return user, true
 	}
-	role, ok := s.Perms.RoleFor(ctx, user.UID, r.PathValue("id"))
+	vehicleID := r.PathValue("id")
+	// Family sharing: a member's role comes from the same sharing list the
+	// owner manages (keyed by verified email), so adding a member actually
+	// grants them control.
+	if s.Members != nil && user.Email != "" {
+		if roleStr, found := s.Members.RoleByEmail(ctx, vehicleID, user.Email); found {
+			role := auth.Role(roleStr)
+			if auth.ValidRole(role) {
+				if !role.Can(action) {
+					writeErr(w, http.StatusForbidden, "role '"+string(role)+"' cannot "+string(action))
+					return auth.User{}, false
+				}
+				return user, true
+			}
+		}
+	}
+	role, ok := s.Perms.RoleFor(ctx, user.UID, vehicleID)
 	if !ok {
 		writeErr(w, http.StatusForbidden, "no access to this vehicle")
 		return auth.User{}, false

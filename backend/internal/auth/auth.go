@@ -47,6 +47,9 @@ var permissions = map[Role]map[Action]bool{
 // Can reports whether a role may perform an action.
 func (r Role) Can(a Action) bool { return permissions[r][a] }
 
+// ValidRole reports whether r is a recognised role.
+func ValidRole(r Role) bool { _, ok := permissions[r]; return ok }
+
 // User is the verified identity extracted from a token.
 type User struct {
 	UID   string

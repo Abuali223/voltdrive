@@ -73,6 +73,37 @@ if (!CFG.firebase) {
 setupPullToRefresh();
 setupInstallPrompt();
 wireExtras();
+setupA11y();
+
+// setupA11y makes the div-based controls keyboard- and screen-reader-friendly:
+// it tags clickable elements with role="button" + tabindex and lets Enter/Space
+// activate the focused one. Runs once for the static screens and re-tags any
+// dynamically created controls (modals, member rows) via a debounced observer.
+function setupA11y() {
+  const SEL = ".qbtn,.ibtn,.row,.obtn,.ctrl-btn,.gi,.map-chip,.seat-tab,.prow,.lpill,.ni,.ctab,#power-btn,[onclick]";
+  const enhance = () => {
+    document.querySelectorAll(SEL).forEach((el) => {
+      if (el.dataset.a11y) return;
+      const tag = el.tagName;
+      if (tag === "BUTTON" || tag === "A" || tag === "INPUT") { el.dataset.a11y = "1"; return; }
+      el.dataset.a11y = "1";
+      if (!el.hasAttribute("role")) el.setAttribute("role", "button");
+      if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "0");
+    });
+  };
+  enhance();
+  let timer;
+  new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(enhance, 200); })
+    .observe(document.body, { childList: true, subtree: true });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const el = document.activeElement;
+    if (el && el.getAttribute && el.getAttribute("role") === "button") {
+      e.preventDefault();
+      el.click();
+    }
+  });
+}
 
 function boot() {
   try {
@@ -262,6 +293,87 @@ function wireAuthScreen() {
 
 // authStatus shows a visible status line under the auth form so the user can
 // see exactly what is happening (idle / signing in / error / signed in).
+// --- Russian for transient toasts / auth status ---
+//
+// For RU users the inline `uz ? "…" : "…"` ternaries already resolve to the
+// English string, so a single English→Russian table (plus a few hardcoded
+// Uzbek sources and "prefix + value" patterns) lets toast()/authStatus()
+// render Russian centrally, without touching ~100 call sites.
+const RU_MSG = {
+  "Account created ✓": "Аккаунт создан ✓",
+  "Approached — unlocked ✓": "Приближение — открыто ✓",
+  "Biometric cancelled — enter PIN": "Биометрия отменена — введите PIN",
+  "Biometric unlock disabled": "Биометрический вход отключён",
+  "Biometric unlock enabled ✓": "Биометрический вход включён ✓",
+  "Centered on location": "Центрировано по местоположению",
+  "Charging stations…": "Зарядные станции…",
+  "Cleared": "Очищено",
+  "Climate updated": "Климат обновлён",
+  "Code copied ✓": "Код скопирован ✓",
+  "Couldn't enable biometrics": "Не удалось включить биометрию",
+  "Disabled": "Отключено",
+  "Email in use — switch to Sign in": "Email занят — перейдите ко входу",
+  "Enter a valid email": "Введите корректный email",
+  "Enter email": "Введите email",
+  "Enter the code": "Введите код",
+  "Enter your email first": "Сначала введите email",
+  "Flashing lights & horn 📍": "Мигают фары и сигнал 📍",
+  "Fuel stations…": "Заправки…",
+  "No geolocation": "Нет геолокации",
+  "No other vehicle": "Нет другого автомобиля",
+  "No route": "Маршрут не найден",
+  "Notification permission denied": "Уведомления запрещены",
+  "Notifications enabled ✓": "Уведомления включены ✓",
+  "PIN updated ✓": "PIN обновлён ✓",
+  "POI error": "Ошибка POI",
+  "Panic! Horn & lights on": "Тревога! Сигнал и фары включены",
+  "Password min 6 chars": "Пароль минимум 6 символов",
+  "Passwords don't match": "Пароли не совпадают",
+  "Pick at least one permission": "Выберите хотя бы одно право",
+  "Profile saved ✓": "Профиль сохранён ✓",
+  "Push not supported here": "Push здесь не поддерживается",
+  "Registering…": "Регистрация…",
+  "Reset link sent to your email ✓": "Ссылка для сброса отправлена на email ✓",
+  "Route error": "Ошибка маршрута",
+  "Routing…": "Построение маршрута…",
+  "Safe zone enabled ✓": "Безопасная зона включена ✓",
+  "Sending…": "Отправка…",
+  "Sign in first": "Сначала войдите",
+  "Signed in — PIN...": "Вход выполнен — PIN...",
+  "Signed in ✓": "Вход выполнен ✓",
+  "Signing in with Gmail…": "Вход через Gmail…",
+  "Signing in…": "Вход…",
+  "This device has no biometrics": "На устройстве нет биометрии",
+  "VAPID key not configured": "VAPID-ключ не настроен",
+  "Walked away — locked ✓": "Удаление — заблокировано ✓",
+  "Authentication not enabled (Console).": "Аутентификация не включена (Console).",
+  "Car is nearby": "Автомобиль рядом",
+  "Car is far": "Автомобиль далеко",
+  "API offline": "API офлайн",
+  // Hardcoded Uzbek sources:
+  "Chiqdingiz": "Вы вышли",
+  "Ilova o'rnatildi ✓": "Приложение установлено ✓",
+};
+// Prefixes for "label + dynamic value" messages.
+const RU_PREFIX = {
+  "Added: ": "Добавлено: ",
+  "Removed: ": "Удалено: ",
+  "Error: ": "Ошибка: ",
+  "Failed: ": "Ошибка: ",
+  "Internal error: ": "Внутренняя ошибка: ",
+  "Location: ": "Местоположение: ",
+  "Located ✓ ±": "Определено ✓ ±",
+  "Chiqishda xato: ": "Ошибка выхода: ",
+};
+function ruMsg(msg) {
+  if (window.App?.lang !== "ru" || typeof msg !== "string") return msg;
+  if (RU_MSG[msg]) return RU_MSG[msg];
+  for (const p in RU_PREFIX) {
+    if (msg.startsWith(p)) return RU_PREFIX[p] + msg.slice(p.length);
+  }
+  return msg; // unknown → leave as-is
+}
+
 function authStatus(msg, isError) {
   let el = document.getElementById("auth-status");
   if (!el) {
@@ -272,7 +384,7 @@ function authStatus(msg, isError) {
     (host?.parentElement || document.querySelector("#s-auth > div"))?.appendChild(el);
   }
   if (el) {
-    el.textContent = msg || "";
+    el.textContent = ruMsg(msg) || "";
     el.style.color = isError ? "#ff7a7a" : "#7fd28a";
   }
 }
@@ -639,7 +751,7 @@ function toast(msg, type) {
     document.body.appendChild(t);
   }
   t.className = type || "";
-  t.textContent = msg;
+  t.textContent = ruMsg(msg);
   t.style.opacity = "1";
   t.style.transform = "translateX(-50%) translateY(0)";
   clearTimeout(t._h);
@@ -2300,6 +2412,37 @@ async function sha256(text) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// PIN hashing: PBKDF2-SHA256 with a per-PIN random salt and a high iteration
+// count, so a stolen localStorage value can't be brute-forced through the tiny
+// 4-digit space the way a bare SHA-256 could. Stored as JSON {v:2,s:salt,h:hash};
+// legacy v1 (plain sha256) values still verify and are upgraded on next unlock.
+const PIN_ITERATIONS = 150000;
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+async function pbkdf2Hex(secret, saltBytes) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: saltBytes, iterations: PIN_ITERATIONS, hash: "SHA-256" }, key, 256);
+  return hex(bits);
+}
+
+async function pinSerialize(uid, pin) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  return JSON.stringify({ v: 2, s: hex(salt), h: await pbkdf2Hex(uid + ":" + pin, salt) });
+}
+
+async function pinVerify(uid, pin, stored) {
+  if (!stored) return false;
+  try {
+    const o = JSON.parse(stored);
+    if (o && o.v === 2 && o.s && o.h) {
+      const salt = Uint8Array.from(o.s.match(/.{2}/g).map((x) => parseInt(x, 16)));
+      return (await pbkdf2Hex(uid + ":" + pin, salt)) === o.h;
+    }
+  } catch (e) { /* not JSON → legacy */ }
+  return (await sha256(uid + ":" + pin)) === stored; // legacy v1
+}
+
 function lockGate(uid) {
   const uz = window.App?.lang === "uz";
   const key = "vd_pin_" + uid;
@@ -2424,7 +2567,7 @@ async function onPinKey(k) {
   const pin = lockState.entry;
   if (lockState.mode === "change") {
     // Verify the current PIN before allowing a new one to be set.
-    const ok = (await sha256(lockState.uid + ":" + pin)) === localStorage.getItem(lockState.key);
+    const ok = await pinVerify(lockState.uid, pin, localStorage.getItem(lockState.key));
     if (ok) {
       lockState.mode = "setup";
       lockState.stage = "first";
@@ -2449,7 +2592,7 @@ async function onPinKey(k) {
       updateDots();
     } else {
       if (pin === lockState.first) {
-        localStorage.setItem(lockState.key, await sha256(lockState.uid + ":" + pin));
+        localStorage.setItem(lockState.key, await pinSerialize(lockState.uid, pin));
         finishUnlock();
       } else {
         shakeLock();
@@ -2461,8 +2604,13 @@ async function onPinKey(k) {
       }
     }
   } else {
-    const ok = (await sha256(lockState.uid + ":" + pin)) === localStorage.getItem(lockState.key);
+    const stored = localStorage.getItem(lockState.key);
+    const ok = await pinVerify(lockState.uid, pin, stored);
     if (ok) {
+      // Upgrade legacy (plain-SHA256) PINs to salted PBKDF2 on first match.
+      try { if (stored && JSON.parse(stored).v === 2) {} } catch (e) {
+        localStorage.setItem(lockState.key, await pinSerialize(lockState.uid, pin));
+      }
       finishUnlock();
     } else {
       shakeLock();
