@@ -498,6 +498,7 @@ body{
       <div style="display:flex;gap:8px;margin-top:9px;">
         <div id="poi-charge" class="map-chip"><i data-lucide="zap" style="width:14px;height:14px"></i><span>Zaryad</span></div>
         <div id="poi-fuel" class="map-chip"><i data-lucide="fuel" style="width:14px;height:14px"></i><span>Benzin</span></div>
+        <div class="map-chip" onclick="App.findCar()"><i data-lucide="bell-ring" style="width:14px;height:14px"></i><span data-i18n="map.find">Find car</span></div>
         <div id="poi-clear" class="map-chip" style="margin-left:auto;"><i data-lucide="x" style="width:14px;height:14px"></i></div>
       </div>
     </div>
@@ -842,7 +843,7 @@ const App = {
     'charge.tyre':'Shina bosimi','charge.saving':'Tejamkor rejim','charge.distance':'Umumiy masofa · 20,000 km',
     'charge.state':'Holati','charge.reserve':'Masofa zaxirasi','charge.engineCtrl':'Dvigatelni boshqarish',
     'charge.inside':'Salon harorati','charge.target':'Maqsad','charge.climateCtrl':'Iqlimni boshqarish',
-    'map.eta':'190 km · 100% gacha 19 daqiqa','map.stations':'3 tadan 1 zaryad stansiyasi mavjud',
+    'map.eta':'190 km · 100% gacha 19 daqiqa','map.stations':'3 tadan 1 zaryad stansiyasi mavjud','map.find':'Mashinani topish',
     'map.go':'Yo\'lga chiqish','seat.title':'O\'rindiq sozlamasi',
     'seat.recline':'Suyanish burchagi · Haydovchi','seat.driver':'HAYDOVCHI',
     'seat.passenger':'YO\'LOVCHI','seat.rear':'ORQA',
@@ -971,6 +972,7 @@ const App = {
   enableNotifications() {},
   clearAlerts() {},
   pickFamilyCar() {},
+  findCar() {},
 
   // Add a vehicle to the garage. Lists supported, backend-seeded cars that
   // aren't in the garage yet (e.g. BYD). New brands beyond these need their

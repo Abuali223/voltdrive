@@ -491,6 +491,8 @@ function wireControls() {
   App.clearAlerts = clearAlerts;
   // Family screen → switch which car's member list is shown.
   App.pickFamilyCar = pickFamilyCar;
+  // Map → flash lights + honk to locate the car.
+  App.findCar = findCar;
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
   const origLights = App.toggleLights.bind(App);
@@ -1561,6 +1563,18 @@ function pickFamilyCar() {
     loadMembers();
     haptic(10);
   }));
+}
+
+// findCar flashes the lights and sounds the horn so you can spot the car in a
+// car park, then turns the lights back off after a few seconds.
+function findCar() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  haptic([12, 40, 12]);
+  toast(uz ? "Faralar yoqildi va signal chalindi 📍" : "Flashing lights & horn 📍", "ok");
+  sendCommand("lights", { on: true });
+  sendCommand("horn");
+  setTimeout(() => sendCommand("lights", { on: false }), 6000);
 }
 
 // --- Push notifications (FCM) ---
