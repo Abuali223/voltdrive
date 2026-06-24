@@ -1014,6 +1014,7 @@ function ensureMap() {
 
 let locating = false;
 let watchId = null;
+let geoDeniedShown = false; // show the "permission denied" toast at most once
 let centeredOnce = false;
 let accCircle = null;
 
@@ -1063,8 +1064,18 @@ function locateDevice(force) {
     },
     (err) => {
       locating = false;
-      const m = err.code === 1 ? (uz ? "ruxsat berilmadi" : "permission denied")
-        : err.code === 2 ? (uz ? "GPS o'chiq / signal yo'q" : "GPS off / no signal")
+      // Permission denied: watchPosition would otherwise keep firing this
+      // callback, leaving the toast stuck on screen. Stop the watch and show
+      // the message only once per session.
+      if (err.code === 1) {
+        if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+        if (!geoDeniedShown) {
+          geoDeniedShown = true;
+          toast((uz ? "Joylashuv: " : "Location: ") + (uz ? "ruxsat berilmadi" : "permission denied"));
+        }
+        return;
+      }
+      const m = err.code === 2 ? (uz ? "GPS o'chiq / signal yo'q" : "GPS off / no signal")
         : (uz ? "vaqt tugadi" : "timed out");
       toast((uz ? "Joylashuv: " : "Location: ") + m);
     },
