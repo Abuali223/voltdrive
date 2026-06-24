@@ -887,9 +887,12 @@ function wireExtras() {
       if (s === "family") loadMembers();
       // Notification history.
       if (s === "alerts") renderAlerts();
+      // 3D seat viewer: load the (heavy) model-viewer module on demand.
+      if (s === "seat") ensureModelViewer();
     };
   }
   if (App.current === "map") ensureMap();
+  if (App.current === "seat") ensureModelViewer();
 
   // "Let's Go" recenters the map on the current location.
   document.querySelectorAll("#s-map .obtn").forEach((el) => {
@@ -962,6 +965,18 @@ function wireExtras() {
 function mapCenter() {
   const c = deviceLoc || lastLoc || { lat: 41.311081, lng: 69.240562 };
   return [c.lat, c.lng];
+}
+
+// ensureModelViewer injects the <model-viewer> module the first time the Seat
+// screen is opened, keeping ~1MB off the initial page load.
+let modelViewerLoading = false;
+function ensureModelViewer() {
+  if (modelViewerLoading || customElements.get("model-viewer")) return;
+  modelViewerLoading = true;
+  const s = document.createElement("script");
+  s.type = "module";
+  s.src = "https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js";
+  document.head.appendChild(s);
 }
 
 function ensureMap() {
