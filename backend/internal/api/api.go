@@ -17,9 +17,9 @@ import (
 
 	"voltdrive/backend/internal/auth"
 	"voltdrive/backend/internal/devices"
-	"voltdrive/backend/internal/members"
 	"voltdrive/backend/internal/geofence"
 	"voltdrive/backend/internal/guestkey"
+	"voltdrive/backend/internal/members"
 	"voltdrive/backend/internal/notify"
 	"voltdrive/backend/internal/provider"
 	"voltdrive/backend/internal/realtime"
@@ -28,25 +28,28 @@ import (
 
 // Server holds dependencies for the HTTP handlers.
 type Server struct {
-	Registry       *provider.Registry
-	Verifier       auth.Verifier
-	Perms          auth.Permissions
-	Hub            *realtime.Hub  // optional: real-time telemetry stream
-	Members        *members.Store // optional: family/shared-access management
-	Devices        *devices.Store  // optional: FCM device-token registry
-	Schedules      *schedule.Store  // optional: departure-timer storage
-	GuestKeys      *guestkey.Store  // optional: time-limited guest access
-	Geofences      *geofence.Store  // optional: safe-zone storage
-	FCM            *notify.FCM      // optional: push sender (for the test endpoint)
-	AllowedOrigins []string       // CORS allowlist (empty = permissive "*")
-	RatePerSec     float64        // per-IP request rate (default 20)
-	RateBurst      float64        // per-IP burst (default 40)
+	Registry         *provider.Registry
+	Verifier         auth.Verifier
+	Perms            auth.Permissions
+	Hub              *realtime.Hub   // optional: real-time telemetry stream
+	Members          *members.Store  // optional: family/shared-access management
+	Devices          *devices.Store  // optional: FCM device-token registry
+	Schedules        *schedule.Store // optional: departure-timer storage
+	GuestKeys        *guestkey.Store // optional: time-limited guest access
+	Geofences        *geofence.Store // optional: safe-zone storage
+	FCM              *notify.FCM     // optional: push sender (for the test endpoint)
+	AllowedOrigins   []string        // CORS allowlist (empty = permissive "*")
+	OwnerEmail       string          // bootstrap fleet owner (full access without a Firestore grant)
+	TrustedProxyHops int             // proxies between us and the client (for real-IP extraction)
+	RatePerSec       float64         // per-IP request rate (default 20)
+	RateBurst        float64         // per-IP burst (default 40)
 }
 
 // Routes builds the http.Handler with all endpoints registered and the
 // hardening middleware chain applied (recovery, request-id, logging, security
 // headers, CORS allowlist, rate limiting).
 func (s *Server) Routes() http.Handler {
+	trustedProxyHops = s.TrustedProxyHops // for spoof-resistant client-IP extraction
 	mux := http.NewServeMux()
 
 	// Liveness + readiness (no auth) — used by Cloud Run / uptime checks.
@@ -145,6 +148,12 @@ func (s *Server) authorize(ctx context.Context, w http.ResponseWriter, r *http.R
 	if err != nil {
 		writeErr(w, http.StatusUnauthorized, "unauthenticated")
 		return auth.User{}, false
+	}
+	// Bootstrap owner: the configured fleet owner has full access to every
+	// vehicle without needing a Firestore grant. Everyone else is resolved
+	// strictly by their stored role (no access unless explicitly granted).
+	if s.OwnerEmail != "" && user.Email != "" && strings.EqualFold(user.Email, s.OwnerEmail) {
+		return user, true
 	}
 	role, ok := s.Perms.RoleFor(ctx, user.UID, r.PathValue("id"))
 	if !ok {
@@ -575,6 +584,15 @@ func (s *Server) handleGuestKeyRevoke(w http.ResponseWriter, r *http.Request, us
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// maskCode redacts all but the first two characters of a guest code so the
+// full credential never lands in logs (e.g. "AB●●●●●●").
+func maskCode(code string) string {
+	if len(code) <= 2 {
+		return "●●"
+	}
+	return code[:2] + strings.Repeat("●", len(code)-2)
+}
+
 // handleGuestRedeem validates a code (no account needed) and returns what the
 // guest is allowed to do, plus the vehicle name for display.
 func (s *Server) handleGuestRedeem(w http.ResponseWriter, r *http.Request) {
@@ -632,7 +650,7 @@ func (s *Server) handleGuestCommand(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "unknown action")
 		return
 	}
-	log.Printf("guest command: %s %s (key %s)", req.Action, k.VehicleID, k.Code)
+	log.Printf("guest command: %s %s (key %s)", req.Action, k.VehicleID, maskCode(k.Code))
 	if err != nil {
 		writeProviderErr(w, err)
 		return
@@ -744,4 +762,3 @@ func writeProviderErr(w http.ResponseWriter, err error) {
 		writeErr(w, http.StatusBadGateway, "vehicle provider error")
 	}
 }
-

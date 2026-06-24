@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -115,8 +116,8 @@ func main() {
 		scheduleStore = schedule.NewStore(projectID, dsToken)
 		guestStore = guestkey.NewStore(projectID, dsToken)
 		geoStore = geofence.NewStore(projectID, dsToken)
-		go runScheduler(scheduleStore, geoStore, registry)
-		log.Printf("scheduler: departure timer + geofence watcher enabled")
+		// Note: the scheduler/geofence watcher is started after FCM setup below,
+		// so geofence-exit events can be pushed to the owner's devices.
 	}
 
 	// --- Real-time telemetry hub ---
@@ -136,6 +137,7 @@ func main() {
 	// FCM push: device-token registry + security-alert sender, when enabled.
 	var fcm *notify.FCM
 	var deviceStore *devices.Store
+	var alerter *notify.FCMAlerter
 	if os.Getenv("FCM_ENABLED") == "1" && projectID != "" {
 		fcmToken := gcp.NewTokenSource(
 			"https://www.googleapis.com/auth/firebase.messaging",
@@ -145,11 +147,18 @@ func main() {
 			"https://www.googleapis.com/auth/datastore",
 		).Token)
 		// Alerts fan out to every registered device (single-owner demo).
-		alerter := notify.NewFCMAlerter(fcm, func(ctx context.Context, _ string) ([]string, error) {
+		alerter = notify.NewFCMAlerter(fcm, func(ctx context.Context, _ string) ([]string, error) {
 			return deviceStore.ListTokens(ctx)
 		})
 		hub.WithAlerter(alerter)
 		log.Printf("alerts: FCM enabled (Firestore device registry)")
+	}
+
+	// Start the departure-timer + geofence watcher now that the alerter exists,
+	// so a car leaving its safe zone pushes a notification (not just a log line).
+	if scheduleStore != nil {
+		go runScheduler(scheduleStore, geoStore, registry, alerter)
+		log.Printf("scheduler: departure timer + geofence watcher enabled")
 	}
 
 	hubCtx, hubCancel := context.WithCancel(context.Background())
@@ -173,19 +182,24 @@ func main() {
 	}
 
 	srv := &api.Server{
-		Registry:       registry,
-		Verifier:       verifier,
-		Perms:          perms,
-		Hub:            hub,
-		Members:        memberStore,
-		Devices:        deviceStore,
-		Schedules:      scheduleStore,
-		GuestKeys:      guestStore,
-		Geofences:      geoStore,
-		FCM:            fcm,
-		AllowedOrigins: origins,
-		RatePerSec:     20,
-		RateBurst:      40,
+		Registry:         registry,
+		Verifier:         verifier,
+		Perms:            perms,
+		Hub:              hub,
+		Members:          memberStore,
+		Devices:          deviceStore,
+		Schedules:        scheduleStore,
+		GuestKeys:        guestStore,
+		Geofences:        geoStore,
+		FCM:              fcm,
+		AllowedOrigins:   origins,
+		OwnerEmail:       os.Getenv("OWNER_EMAIL"),
+		TrustedProxyHops: atoiOr(os.Getenv("TRUSTED_PROXY_HOPS"), 0),
+		RatePerSec:       20,
+		RateBurst:        40,
+	}
+	if srv.OwnerEmail != "" {
+		log.Printf("auth: bootstrap owner = %s", srv.OwnerEmail)
 	}
 
 	httpServer := &http.Server{
@@ -215,17 +229,20 @@ func main() {
 
 // runScheduler runs once a minute. It (1) warms each car up at its set local
 // time (Asia/Tashkent = UTC+5) — remote start + climate — and (2) watches every
-// geofenced car, logging an alert when one leaves its safe zone. Both work
-// server-side, so they fire even when no app is open.
-func runScheduler(store *schedule.Store, geo *geofence.Store, registry *provider.Registry) {
+// geofenced car, pushing an alert to the owner's devices when one leaves its
+// safe zone. Both work server-side, so they fire even when no app is open.
+//
+// Across multiple Cloud Run instances, each timed action is guarded by a
+// Firestore claim (store.Claim), so a warm-up or alert fires exactly once even
+// when several instances tick simultaneously.
+func runScheduler(store *schedule.Store, geo *geofence.Store, registry *provider.Registry, alerter *notify.FCMAlerter) {
 	const offset = 5 * time.Hour // Tashkent, no DST
-	fired := map[string]string{}
-	inside := map[string]bool{} // last known in-zone state per vehicle
+	inside := map[string]bool{}  // last known in-zone state per vehicle
 	t := time.NewTicker(60 * time.Second)
 	defer t.Stop()
 	for {
 		now := time.Now().UTC().Add(offset)
-		slot := now.Format("2006-01-02 15:04")
+		slot := now.Format("2006-01-02-15-04")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
 		if all, err := store.All(ctx); err == nil {
@@ -233,10 +250,10 @@ func runScheduler(store *schedule.Store, geo *geofence.Store, registry *provider
 				if !sc.Enabled || sc.Hour != now.Hour() || sc.Minute != now.Minute() {
 					continue
 				}
-				if fired[id] == slot {
-					continue // already fired this minute
+				// Only one instance acts on this (vehicle, minute) warm-up.
+				if !store.Claim(ctx, "warmup-"+id+"-"+slot) {
+					continue
 				}
-				fired[id] = slot
 				p := registry.For(id)
 				if err := p.RemoteStart(ctx, id); err != nil {
 					log.Printf("scheduler: start %s: %v", id, err)
@@ -264,7 +281,18 @@ func runScheduler(store *schedule.Store, geo *geofence.Store, registry *provider
 					}
 					in := z.Contains(snap.Location.Lat, snap.Location.Lng)
 					if was, seen := inside[id]; seen && was && !in {
-						log.Printf("geofence: ALERT %s left safe zone (%.5f,%.5f)", id, snap.Location.Lat, snap.Location.Lng)
+						// Exit detected — one instance per minute pushes the alert.
+						if store.Claim(ctx, "geoexit-"+id+"-"+slot) {
+							log.Printf("geofence: ALERT %s left safe zone (%.5f,%.5f)", id, snap.Location.Lat, snap.Location.Lng)
+							if alerter != nil {
+								name := id
+								if snap.Name != "" {
+									name = snap.Name
+								}
+								alerter.VehicleAlert(ctx, id, "geofence_exit",
+									name+" xavfsiz hududdan chiqdi")
+							}
+						}
 					}
 					inside[id] = in
 				}
@@ -281,6 +309,18 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// atoiOr parses s as an int, returning def on empty/invalid input.
+func atoiOr(s string, def int) int {
+	if s == "" {
+		return def
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return n
 }
 
 // brandConfig builds a live API config for a brand from environment variables,

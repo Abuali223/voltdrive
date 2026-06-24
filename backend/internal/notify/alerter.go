@@ -51,6 +51,8 @@ func titleForKind(kind string) string {
 		return "VoltDrive — Batareya"
 	case "moved_while_locked", "unlocked":
 		return "VoltDrive — Xavfsizlik ⚠️"
+	case "geofence_exit":
+		return "VoltDrive — Xavfsiz hudud ⚠️"
 	default:
 		return "VoltDrive"
 	}

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -91,6 +92,49 @@ func (s *Store) Put(ctx context.Context, vehicleID string, sc Schedule) error {
 		return fmt.Errorf("schedule put: %s", resp.Status)
 	}
 	return nil
+}
+
+// Claim atomically reserves a one-shot token so that, across multiple server
+// instances, only the first caller acts on a given event (e.g. a warm-up slot
+// or a geofence-exit alert). It uses a Firestore create-if-absent write:
+// success (2xx) means this caller won; 409 ALREADY_EXISTS means another
+// instance already handled it. Any other error returns true (fail-open) so a
+// transient Firestore hiccup never silently skips a scheduled action.
+func (s *Store) Claim(ctx context.Context, token string) bool {
+	token = sanitizeToken(token)
+	body := map[string]any{"fields": map[string]any{
+		"ts": map[string]any{"integerValue": strconv.FormatInt(time.Now().Unix(), 10)},
+	}}
+	b, _ := json.Marshal(body)
+	base := fmt.Sprintf("https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/claims", s.projectID)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, base+"?documentId="+token, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	if err := s.authed(ctx, req); err != nil {
+		return true
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return true // fail-open: better to risk a rare duplicate than skip entirely
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusConflict {
+		return false // another instance already claimed this token
+	}
+	return resp.StatusCode >= 200 && resp.StatusCode < 300
+}
+
+// sanitizeToken makes an arbitrary string safe as a Firestore document ID
+// (no '/', no reserved values; keep it short and URL-clean).
+func sanitizeToken(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	return b.String()
 }
 
 // All returns every stored schedule keyed by vehicleId (for the ticker).

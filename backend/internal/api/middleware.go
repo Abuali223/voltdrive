@@ -196,9 +196,26 @@ func (l *limiter) middleware(next http.Handler) http.Handler {
 	})
 }
 
+// trustedProxyHops is the number of trusted reverse proxies between this
+// service and the public internet (set from Server.TrustedProxyHops). On Cloud
+// Run with default ingress this is 0 — the platform appends the real peer as
+// the right-most X-Forwarded-For entry, so the leftmost (client-supplied,
+// spoofable) entries are ignored.
+var trustedProxyHops int
+
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return strings.TrimSpace(strings.Split(xff, ",")[0])
+		parts := strings.Split(xff, ",")
+		// Walk in from the right by the number of trusted hops. The leftmost
+		// values are attacker-controlled and must never be used as the rate-
+		// limit / abuse key.
+		idx := len(parts) - 1 - trustedProxyHops
+		if idx < 0 {
+			idx = 0
+		}
+		if ip := strings.TrimSpace(parts[idx]); ip != "" {
+			return ip
+		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
