@@ -59,6 +59,18 @@
       <button class="btn ghost sm" id="refresh" style="margin-left:auto;">↻ Yangilash</button>
     </div>
     <div id="list"></div>
+
+    <!-- Super admin only: manage who can access this panel -->
+    <div id="super" class="card" style="display:none;margin-top:22px;">
+      <h2>👑 Super admin · Adminlar</h2>
+      <p class="muted" style="margin-bottom:14px;">Bu panelga kira oladigan adminlarni boshqaring. Super admin (egasi) o'chirib bo'lmaydi.</p>
+      <div class="row" style="margin-bottom:16px;">
+        <input id="new-admin" type="email" placeholder="yangi-admin@gmail.com"
+          style="flex:1;min-width:220px;background:#16171b;color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:11px 14px;font-size:14px;">
+        <button class="btn" id="add-admin">+ Qo'shish</button>
+      </div>
+      <div id="admin-list"></div>
+    </div>
   </div>
 </div>
 
@@ -87,6 +99,7 @@ onAuthStateChanged(auth, (u) => {
     $("who").innerHTML = `<span class="me">${u.email}</span> <button class="btn ghost sm" id="out">Chiqish</button>`;
     $("out").onclick = () => signOut(auth);
     load();
+    loadAdmins();
   } else {
     $("signin").style.display = "block"; $("panel").style.display = "none"; $("who").innerHTML = "";
   }
@@ -139,6 +152,44 @@ function render() {
 }
 
 function tierName(t) { return { "1m": "1 oy", "2m": "2 oy", "1y": "1 yil" }[t] || t; }
+
+// --- Super admin: manage admins ---
+let superEmail = "";
+async function loadAdmins() {
+  try {
+    const r = await api("/v1/admin/admins");
+    if (r.status === 403) { $("super").style.display = "none"; return; } // not super admin
+    if (!r.ok) return;
+    const d = await r.json();
+    superEmail = (d.super || "").toLowerCase();
+    $("super").style.display = "block";
+    renderAdmins(d.admins || []);
+  } catch (e) {}
+}
+function renderAdmins(list) {
+  const rows = [];
+  rows.push(`<div class="row" style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);">
+    <div><div class="email">${superEmail}</div><div class="muted">Super admin · egasi</div></div>
+    <div class="acts"><span class="badge b-active">SUPER</span></div></div>`);
+  list.filter(e => e.toLowerCase() !== superEmail).forEach(e => {
+    rows.push(`<div class="row" style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);">
+      <div><div class="email">${e}</div><div class="muted">Admin</div></div>
+      <div class="acts"><button class="btn red sm" data-del="${encodeURIComponent(e)}">O'chirish</button></div></div>`);
+  });
+  $("admin-list").innerHTML = rows.join("");
+  $("admin-list").querySelectorAll("[data-del]").forEach(b => b.onclick = () => removeAdmin(b.dataset.del));
+}
+$("add-admin").onclick = async () => {
+  const email = $("new-admin").value.trim();
+  if (!email.includes("@")) { alert("Email noto'g'ri"); return; }
+  const r = await api("/v1/admin/admins", { method: "POST", body: JSON.stringify({ email }) });
+  if (r.ok) { $("new-admin").value = ""; loadAdmins(); } else alert("Xato: " + r.status);
+};
+async function removeAdmin(enc) {
+  if (!confirm("Adminni o'chirasizmi?")) return;
+  const r = await api(`/v1/admin/admins/${enc}`, { method: "DELETE" });
+  if (r.ok) loadAdmins(); else alert("Xato: " + r.status);
+}
 
 async function activate(uid) {
   const tier = $("t-" + uid).value;

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"voltdrive/backend/internal/admins"
 	"voltdrive/backend/internal/auth"
 	"voltdrive/backend/internal/devices"
 	"voltdrive/backend/internal/geofence"
@@ -39,6 +40,7 @@ type Server struct {
 	GuestKeys        *guestkey.Store     // optional: time-limited guest access
 	Geofences        *geofence.Store     // optional: safe-zone storage
 	Subscriptions    *subscription.Store // optional: freemium plan/billing state
+	Admins           *admins.Store       // optional: additional admin emails (super = OwnerEmail)
 	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
 	AllowedOrigins   []string            // CORS allowlist (empty = permissive "*")
 	OwnerEmail       string              // bootstrap fleet owner (full access without a Firestore grant)
@@ -128,6 +130,14 @@ func (s *Server) Routes() http.Handler {
 		mux.HandleFunc("GET /v1/admin/subscriptions", s.guardUser(s.handleAdminSubs))
 		mux.HandleFunc("POST /v1/admin/subscriptions/{uid}/activate", s.guardUser(s.handleAdminActivate))
 		mux.HandleFunc("POST /v1/admin/subscriptions/{uid}/revoke", s.guardUser(s.handleAdminRevoke))
+	}
+
+	// Admin management (super admin only): list / add / remove admins.
+	mux.HandleFunc("GET /v1/admin/whoami", s.guardUser(s.handleWhoAmI))
+	if s.Admins != nil {
+		mux.HandleFunc("GET /v1/admin/admins", s.guardUser(s.handleAdminsList))
+		mux.HandleFunc("POST /v1/admin/admins", s.guardUser(s.handleAdminsAdd))
+		mux.HandleFunc("DELETE /v1/admin/admins/{email}", s.guardUser(s.handleAdminsRemove))
 	}
 
 	// Real-time telemetry stream (WebSocket).
@@ -613,9 +623,18 @@ func (s *Server) handleGuestKeyRevoke(w http.ResponseWriter, r *http.Request, us
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// isAdmin reports whether the caller is the configured fleet owner/admin.
-func (s *Server) isAdmin(u auth.User) bool {
+// isSuperAdmin is the single root admin (OWNER_EMAIL) who manages other admins.
+func (s *Server) isSuperAdmin(u auth.User) bool {
 	return s.OwnerEmail != "" && u.Email != "" && strings.EqualFold(u.Email, s.OwnerEmail)
+}
+
+// isAdmin reports whether the caller may use the admin panel: the super admin,
+// or any email added to the admins set.
+func (s *Server) isAdmin(ctx context.Context, u auth.User) bool {
+	if s.isSuperAdmin(u) {
+		return true
+	}
+	return s.Admins != nil && u.Email != "" && s.Admins.IsAdmin(ctx, u.Email)
 }
 
 func (s *Server) handleSubGet(w http.ResponseWriter, r *http.Request, user auth.User) {
@@ -681,7 +700,7 @@ func (s *Server) handleSubRequest(w http.ResponseWriter, r *http.Request, user a
 }
 
 func (s *Server) handleAdminSubs(w http.ResponseWriter, r *http.Request, user auth.User) {
-	if !s.isAdmin(user) {
+	if !s.isAdmin(r.Context(), user) {
 		writeErr(w, http.StatusForbidden, "admin only")
 		return
 	}
@@ -694,7 +713,7 @@ func (s *Server) handleAdminSubs(w http.ResponseWriter, r *http.Request, user au
 }
 
 func (s *Server) handleAdminActivate(w http.ResponseWriter, r *http.Request, user auth.User) {
-	if !s.isAdmin(user) {
+	if !s.isAdmin(r.Context(), user) {
 		writeErr(w, http.StatusForbidden, "admin only")
 		return
 	}
@@ -730,7 +749,7 @@ func (s *Server) handleAdminActivate(w http.ResponseWriter, r *http.Request, use
 }
 
 func (s *Server) handleAdminRevoke(w http.ResponseWriter, r *http.Request, user auth.User) {
-	if !s.isAdmin(user) {
+	if !s.isAdmin(r.Context(), user) {
 		writeErr(w, http.StatusForbidden, "admin only")
 		return
 	}
@@ -749,6 +768,68 @@ func (s *Server) handleAdminRevoke(w http.ResponseWriter, r *http.Request, user 
 	}
 	audit(r, user, uid, "sub:revoke", nil)
 	writeJSON(w, http.StatusOK, sub)
+}
+
+// handleWhoAmI tells the caller whether they are an admin / super admin, so the
+// panel can show or hide the admin-management section.
+func (s *Server) handleWhoAmI(w http.ResponseWriter, r *http.Request, user auth.User) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"email": user.Email,
+		"admin": s.isAdmin(r.Context(), user),
+		"super": s.isSuperAdmin(user),
+	})
+}
+
+func (s *Server) handleAdminsList(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isSuperAdmin(user) {
+		writeErr(w, http.StatusForbidden, "super admin only")
+		return
+	}
+	list, err := s.Admins.List(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not list admins")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"super": s.OwnerEmail, "admins": list})
+}
+
+func (s *Server) handleAdminsAdd(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isSuperAdmin(user) {
+		writeErr(w, http.StatusForbidden, "super admin only")
+		return
+	}
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	if !strings.Contains(email, "@") {
+		writeErr(w, http.StatusBadRequest, "invalid email")
+		return
+	}
+	if err := s.Admins.Add(r.Context(), email); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not add admin")
+		return
+	}
+	audit(r, user, email, "admin:add", nil)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "email": email})
+}
+
+func (s *Server) handleAdminsRemove(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isSuperAdmin(user) {
+		writeErr(w, http.StatusForbidden, "super admin only")
+		return
+	}
+	email, _ := url.PathUnescape(r.PathValue("email"))
+	if err := s.Admins.Remove(r.Context(), email); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not remove admin")
+		return
+	}
+	audit(r, user, email, "admin:remove", nil)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // maskCode redacts all but the first two characters of a guest code so the
