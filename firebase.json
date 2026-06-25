@@ -61,6 +61,12 @@
         ]
       },
       {
+        "source": "/@(admin.html|pitch.html)",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
         "source": "**/*.@(jpg|jpeg|png|webp)",
         "headers": [
           { "key": "Cache-Control", "value": "public, max-age=86400" }
