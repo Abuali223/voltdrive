@@ -1,0 +1,10 @@
+# Build output
+build/
+.gradle/
+local.properties
+
+# Secrets — NEVER commit these
+*.keystore
+*.jks
+key.properties
+keystore-credentials.txt

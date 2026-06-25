@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "uz.voltdrive.app",
+      "sha256_cert_fingerprints": [
+        "D3:23:16:20:B4:52:FB:00:0E:F5:0D:C7:1F:F7:44:A4:14:DA:D4:12:42:A7:4A:E8:13:50:5E:80:26:A1:23:AC"
+      ]
+    }
+  }
+]

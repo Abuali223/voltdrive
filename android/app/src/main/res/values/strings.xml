@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="appName">VoltDrive</string>
+    <string name="launchUrl">https://eldi-79bf9.web.app/index.html</string>
+    <string name="hostName">eldi-79bf9.web.app</string>
+    <string name="assetStatements">[{ \"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://eldi-79bf9.web.app\"}}]</string>
+</resources>

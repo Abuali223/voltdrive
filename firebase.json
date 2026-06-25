@@ -9,6 +9,7 @@
       "**/.*",
       "**/node_modules/**",
       "backend/**",
+      "android/**",
       "app/**",
       "web/**",
       "chats/**",

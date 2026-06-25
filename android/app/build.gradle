@@ -1,0 +1,44 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace "uz.voltdrive.app"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "uz.voltdrive.app"     // PERMANENT after first Play upload — confirm before publishing
+        minSdk 21
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    // Release signing is driven by environment variables (set in CI / locally).
+    // The keystore itself is never committed (see .gitignore).
+    signingConfigs {
+        release {
+            def ksPath = System.getenv("ANDROID_KEYSTORE_PATH") ?: "voltdrive-upload.keystore"
+            storeFile rootProject.file(ksPath)
+            storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "voltdrive"
+            keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.browser:browser:1.8.0'
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}
