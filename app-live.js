@@ -66,6 +66,8 @@ let poiMarkers = [];
 let destPoint = null; // current destination {lat,lng,name}
 let routeStops = []; // intermediate stops (charging/fuel) [{lat,lng,name}]
 let stopMarkers = []; // leaflet markers for the intermediate stops
+let lastBattery = null; // latest live battery %
+let assistantHistory = []; // AI assistant conversation [{role,text}]
 
 if (!CFG.firebase) {
   console.info("VoltDrive: live mode OFF (no config) — running in demo mode.");
@@ -145,6 +147,7 @@ function boot() {
         if (user) {
           authStatus(uzNow() ? "Kirildi — PIN..." : "Signed in — PIN...");
           showUser(user);
+          aiFab(true);
           try { subscribe(); } catch (e) { console.warn("subscribe:", e); }
           refreshSubscription(); // load the user's plan for the profile + gating
           checkAdminAccess();    // show the Admin panel row for admins
@@ -158,6 +161,7 @@ function boot() {
         } else {
           hideUser();
           hideLock();
+          aiFab(false);
           // Signed out → auth screen is the root; reveal it.
           if (window.App) { App.resetRoot("auth"); App.hideSplash(); }
         }
@@ -477,6 +481,7 @@ function applyLive(v) {
   }
   if (hasBatt) {
     setHTML("cs-battery", `${e.batteryLevel}<span style="font-size:12px;color:#7e8086">%</span>`);
+    lastBattery = e.batteryLevel;
   }
   if (hasRange && hasBatt) {
     set("cs-rangepct", `km · ${e.batteryLevel}%`);
@@ -594,6 +599,7 @@ function wireControls() {
   // Premium / subscription + Fleet dashboard.
   App.openPremium = openPremium;
   App.openFleet = openFleet;
+  App.openAssistant = openAssistant;
   App.startTrial = startTrial;
   App.requestTier = requestTier;
   App.copyCard = copyCard;
@@ -1409,6 +1415,114 @@ async function loadPOI(kind) {
 function clearPOI() {
   poiMarkers.forEach((m) => leafletMap && leafletMap.removeLayer(m));
   poiMarkers = [];
+}
+
+// ===== AI assistant (Gemini-backed chat that can control the car) =====
+function aiFab(show) {
+  const f = document.getElementById("ai-fab");
+  if (f) f.style.display = show ? "flex" : "none";
+}
+
+// Snapshot of the active car for the assistant's context.
+function carContext() {
+  const c = (window.App && App.activeCar) || {};
+  return {
+    name: c.name || "VoltDrive",
+    locked: App?.locked === true,
+    engineOn: App?.engineOn === true,
+    batteryPct: lastBattery,
+    rangeKm: lastRangeKm || null,
+    location: lastLoc ? { lat: +lastLoc.lat.toFixed(4), lng: +lastLoc.lng.toFixed(4) } : null,
+  };
+}
+
+function aiBubble(role, text) {
+  const box = document.getElementById("ai-msgs");
+  if (!box) return null;
+  const me = role === "user";
+  const b = document.createElement("div");
+  b.style.cssText = "max-width:82%;padding:10px 13px;border-radius:15px;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word;" +
+    (me ? "align-self:flex-end;background:linear-gradient(135deg,#FF8A2B,#FF4D00);color:#fff;border-bottom-right-radius:5px;"
+        : "align-self:flex-start;background:rgba(255,255,255,.06);color:#e8e9ec;border-bottom-left-radius:5px;");
+  b.textContent = text;
+  box.appendChild(b);
+  box.scrollTop = box.scrollHeight;
+  return b;
+}
+
+function openAssistant() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  if (document.getElementById("ai-sheet")) return;
+  const o = document.createElement("div");
+  o.id = "ai-sheet";
+  o.style.cssText = "position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);display:flex;flex-direction:column;justify-content:flex-end;font-family:'Manrope',system-ui;";
+  o.addEventListener("click", (e) => { if (e.target === o) o.remove(); });
+  o.innerHTML =
+    '<div style="background:#121317;border:1px solid rgba(255,255,255,.08);border-radius:24px 24px 0 0;max-height:84vh;display:flex;flex-direction:column;animation:scrIn .26s ease;">' +
+      '<div style="display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.06);">' +
+        '<div style="width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;"><i data-lucide="sparkles" style="width:18px;height:18px;color:#fff"></i></div>' +
+        '<div style="flex:1;"><div style="font-family:\'Sora\';font-weight:800;font-size:16px;color:#fff;">AI yordamchi</div><div style="font-size:11px;color:#7e8086;">' + (uz ? "Mashina bilan gaplashing" : "Talk to your car") + '</div></div>' +
+        '<div id="ai-close" style="color:#9a9ca2;font-size:24px;line-height:1;cursor:pointer;padding:4px 6px;">×</div>' +
+      '</div>' +
+      '<div id="ai-msgs" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;min-height:220px;"></div>' +
+      '<div style="padding:12px 14px;border-top:1px solid rgba(255,255,255,.06);display:flex;gap:9px;align-items:center;padding-bottom:max(12px,env(safe-area-inset-bottom));">' +
+        '<input id="ai-input" placeholder="' + (uz ? "Masalan: eshikni och" : "e.g. unlock the doors") + '" style="flex:1;height:46px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 14px;font-size:14px;outline:none;font-family:Manrope;">' +
+        '<div id="ai-send" style="width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;"><i data-lucide="arrow-up" style="width:20px;height:20px;color:#fff"></i></div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(o);
+  if (window.lucide) lucide.createIcons();
+  const input = o.querySelector("#ai-input");
+  o.querySelector("#ai-close").onclick = () => o.remove();
+  const doSend = () => { const t = input.value.trim(); if (t) { input.value = ""; assistantSend(t); } };
+  o.querySelector("#ai-send").onclick = doSend;
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") doSend(); });
+  if (assistantHistory.length) {
+    assistantHistory.forEach((t) => aiBubble(t.role, t.text));
+  } else {
+    aiBubble("model", uz
+      ? "Salom! Mashinangiz haqida so'rang yoki buyruq bering — \"eshikni och\", \"zaryad qancha?\", \"salonni 22 ga isit\"."
+      : "Hi! Ask about your car or give a command — \"unlock\", \"how much charge?\", \"set cabin to 22\".");
+  }
+  setTimeout(() => input.focus(), 100);
+}
+
+async function assistantSend(text) {
+  const uz = window.App?.lang === "uz";
+  aiBubble("user", text);
+  assistantHistory.push({ role: "user", text });
+  const typing = aiBubble("model", "…");
+  try {
+    const tk = await auth.currentUser.getIdToken();
+    const res = await fetch(`${CFG.apiBase}/v1/assistant`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` },
+      body: JSON.stringify({ message: text, car: carContext(), history: assistantHistory.slice(-12) }),
+    });
+    if (res.status === 402) { if (typing) typing.textContent = uz ? "Bu Premium funksiya — obuna kerak." : "This is a Premium feature."; return; }
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const rep = await res.json();
+    if (typing) typing.textContent = rep.reply || "…";
+    assistantHistory.push({ role: "model", text: rep.reply || "" });
+    runAssistantAction(rep);
+  } catch (e) {
+    if (typing) typing.textContent = uz ? "Xatolik — qayta urinib ko'ring." : "Error — try again.";
+  }
+}
+
+// Executes the action the assistant chose, reusing the existing (RBAC-guarded)
+// command endpoints. Informational replies (status/none) do nothing.
+function runAssistantAction(rep) {
+  const a = rep && rep.action;
+  if (!a || a === "none" || a === "status") return;
+  if (a === "locate") { try { App.go && App.go("map"); App.findCar && App.findCar(); } catch (_) {} return; }
+  if (a === "climate") {
+    const t = rep.params && rep.params.temp;
+    sendCommand("climate", { on: true, targetC: Math.max(14, Math.min(32, Math.round(t || 22))) });
+    return;
+  }
+  if (["lock", "unlock", "start", "stop"].includes(a)) sendCommand(a, null);
 }
 
 function clearRoute() {

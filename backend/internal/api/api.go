@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"voltdrive/backend/internal/admins"
+	"voltdrive/backend/internal/assistant"
 	"voltdrive/backend/internal/auth"
 	"voltdrive/backend/internal/branding"
 	"voltdrive/backend/internal/devices"
@@ -48,6 +49,7 @@ type Server struct {
 	Users            *users.Store        // optional: sign-in directory (admin user list)
 	Fleets           *fleet.Store        // optional: per-operator fleet dashboard
 	Branding         *branding.Store     // optional: white-label theme (super-admin editable)
+	Assistant        *assistant.Client   // optional: Gemini-backed AI assistant
 	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
 	AllowedOrigins   []string            // CORS allowlist (empty = permissive "*")
 	OwnerEmail       string              // bootstrap fleet owner (full access without a Firestore grant)
@@ -160,6 +162,9 @@ func (s *Server) Routes() http.Handler {
 
 	// White-label branding: public read (so the app themes before login),
 	// super-admin write (the branding panel).
+	if s.Assistant != nil {
+		mux.HandleFunc("POST /v1/assistant", s.guardUser(s.handleAssistant))
+	}
 	if s.Branding != nil {
 		mux.HandleFunc("GET /v1/branding", s.handleBrandingGet)
 		mux.HandleFunc("PUT /v1/admin/branding", s.guardUser(s.handleBrandingPut))
@@ -677,10 +682,10 @@ func (s *Server) isAdmin(ctx context.Context, u auth.User) bool {
 	return s.Admins != nil && u.Email != "" && u.EmailVerified && s.Admins.IsAdmin(ctx, u.Email)
 }
 
-// fleetEntitled reports whether the caller may use the (PRO) fleet feature:
-// an active subscription, or any admin. Enforced server-side so the paywall
-// cannot be bypassed by calling the API directly.
-func (s *Server) fleetEntitled(ctx context.Context, u auth.User) bool {
+// premiumEntitled reports whether the caller may use a PRO feature (fleet,
+// AI assistant): an active subscription, or any admin. Enforced server-side so
+// the paywall cannot be bypassed by calling the API directly.
+func (s *Server) premiumEntitled(ctx context.Context, u auth.User) bool {
 	if s.isAdmin(ctx, u) {
 		return true
 	}
@@ -689,6 +694,39 @@ func (s *Server) fleetEntitled(ctx context.Context, u auth.User) bool {
 	}
 	sub, err := s.Subscriptions.Get(ctx, u.UID)
 	return err == nil && sub.Active()
+}
+
+// handleAssistant answers a chat message with the Gemini-backed assistant and
+// returns a structured reply { reply, action, params }. The app performs any
+// action through the existing (RBAC-guarded) command endpoints.
+func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.premiumEntitled(r.Context(), user) {
+		writeErr(w, http.StatusPaymentRequired, "premium required")
+		return
+	}
+	var req struct {
+		Message string           `json:"message"`
+		Car     json.RawMessage  `json:"car"`
+		History []assistant.Turn `json:"history"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil || strings.TrimSpace(req.Message) == "" {
+		writeErr(w, http.StatusBadRequest, "message required")
+		return
+	}
+	if len(req.History) > 12 {
+		req.History = req.History[len(req.History)-12:]
+	}
+	carJSON := "{}"
+	if len(req.Car) > 0 {
+		carJSON = string(req.Car)
+	}
+	rep, err := s.Assistant.Ask(r.Context(), req.Message, carJSON, req.History)
+	if err != nil {
+		log.Printf("assistant error: %v", err)
+		writeErr(w, http.StatusBadGateway, "assistant unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, rep)
 }
 
 func (s *Server) handleSubGet(w http.ResponseWriter, r *http.Request, user auth.User) {
@@ -907,7 +945,7 @@ func (s *Server) handleAdminUsers(w http.ResponseWriter, r *http.Request, user a
 var defaultFleetIDs = []string{"voyah-001", "deepal-002", "dongfeng-003", "byd-004"}
 
 func (s *Server) handleFleetGet(w http.ResponseWriter, r *http.Request, user auth.User) {
-	if !s.fleetEntitled(r.Context(), user) {
+	if !s.premiumEntitled(r.Context(), user) {
 		writeErr(w, http.StatusPaymentRequired, "premium required")
 		return
 	}
@@ -923,7 +961,7 @@ func (s *Server) handleFleetGet(w http.ResponseWriter, r *http.Request, user aut
 }
 
 func (s *Server) handleFleetPut(w http.ResponseWriter, r *http.Request, user auth.User) {
-	if !s.fleetEntitled(r.Context(), user) {
+	if !s.premiumEntitled(r.Context(), user) {
 		writeErr(w, http.StatusPaymentRequired, "premium required")
 		return
 	}

@@ -1426,6 +1426,11 @@ window.App = App;
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 
+<!-- AI assistant launcher (shown only when signed in). -->
+<div id="ai-fab" onclick="App.openAssistant()" style="display:none;position:fixed;right:16px;bottom:88px;z-index:95;width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#FF8A2B,#FF4D00);box-shadow:0 10px 26px -6px rgba(255,90,0,.7);align-items:center;justify-content:center;cursor:pointer;">
+  <i data-lucide="sparkles" style="width:24px;height:24px;color:#fff"></i>
+</div>
+
 <!-- Live integration: Firebase Auth + Realtime Database + backend commands.
      Falls back to demo mode automatically if not configured. -->
 <script src="voltdrive.config.js"></script>

@@ -30,6 +30,7 @@ import (
 
 	"voltdrive/backend/internal/admins"
 	"voltdrive/backend/internal/api"
+	"voltdrive/backend/internal/assistant"
 	"voltdrive/backend/internal/auth"
 	"voltdrive/backend/internal/branding"
 	"voltdrive/backend/internal/devices"
@@ -121,6 +122,7 @@ func main() {
 	var userStore *users.Store
 	var fleetStore *fleet.Store
 	var brandStore *branding.Store
+	var assistClient *assistant.Client
 	if projectID != "" {
 		dsToken := gcp.NewTokenSource("https://www.googleapis.com/auth/datastore").Token
 		scheduleStore = schedule.NewStore(projectID, dsToken)
@@ -131,6 +133,9 @@ func main() {
 		userStore = users.NewStore(projectID, dsToken)
 		fleetStore = fleet.NewStore(projectID, dsToken)
 		brandStore = branding.NewStore(projectID, dsToken)
+		// AI assistant via Gemini on Vertex AI (cloud-platform scope; no API key).
+		assistClient = assistant.NewClient(projectID, os.Getenv("GEMINI_LOCATION"), os.Getenv("GEMINI_MODEL"),
+			gcp.NewTokenSource("https://www.googleapis.com/auth/cloud-platform").Token)
 		// Note: the scheduler/geofence watcher is started after FCM setup below,
 		// so geofence-exit events can be pushed to the owner's devices.
 	}
@@ -211,6 +216,7 @@ func main() {
 		Users:            userStore,
 		Fleets:           fleetStore,
 		Branding:         brandStore,
+		Assistant:        assistClient,
 		FCM:              fcm,
 		AllowedOrigins:   origins,
 		OwnerEmail:       os.Getenv("OWNER_EMAIL"),
