@@ -68,8 +68,12 @@ body{
   background:#FF6A1A;border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25),0 2px 7px rgba(0,0,0,.5);}
 .map-chip{display:flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:11px;
   background:rgba(18,19,22,.94);border:1px solid rgba(255,255,255,.1);color:#c8cace;
-  font-size:12px;font-weight:600;cursor:pointer;backdrop-filter:blur(8px);}
+  font-size:12px;font-weight:600;cursor:pointer;backdrop-filter:blur(8px);flex:0 0 auto;white-space:nowrap;}
 .map-chip.on{background:linear-gradient(150deg,#FF8A2B,#FF4D00);color:#fff;border-color:transparent;}
+/* Horizontally scrollable filter row so the last chip (Trevoga) is never cut off. */
+.map-chips{display:flex;gap:8px;margin-top:9px;overflow-x:auto;padding-bottom:2px;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.map-chips::-webkit-scrollbar{display:none;}
 .vd-poi{background:#1A1C22;border:2px solid #FF6A1A;border-radius:50%;width:26px;height:26px;
   display:flex;align-items:center;justify-content:center;color:#FF8A3D;font-size:13px;}
 .seat-tab{flex:1;padding:12px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);text-align:center;cursor:pointer;}
@@ -531,25 +535,30 @@ body{
         <i data-lucide="search" style="position:absolute;right:14px;top:14px;width:18px;height:18px;color:#7e8086;pointer-events:none"></i>
         <div id="map-results" style="display:none;position:absolute;top:52px;left:0;right:0;background:rgba(18,19,22,.98);backdrop-filter:blur(12px);border-radius:14px;border:1px solid rgba(255,255,255,.08);max-height:260px;overflow-y:auto;z-index:6;box-shadow:0 20px 40px -12px rgba(0,0,0,.7);"></div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:9px;">
+      <div class="map-chips">
         <div id="poi-charge" class="map-chip"><i data-lucide="zap" style="width:14px;height:14px"></i><span>Zaryad</span></div>
         <div id="poi-fuel" class="map-chip"><i data-lucide="fuel" style="width:14px;height:14px"></i><span>Benzin</span></div>
         <div class="map-chip" onclick="App.findCar()"><i data-lucide="bell-ring" style="width:14px;height:14px"></i><span data-i18n="map.find">Find car</span></div>
         <div class="map-chip" onclick="App.panic()" style="color:#ff6a6a;border-color:rgba(255,80,80,.4);"><i data-lucide="siren" style="width:14px;height:14px"></i><span data-i18n="map.panic">Panic</span></div>
-        <div id="poi-clear" class="map-chip" style="margin-left:auto;"><i data-lucide="x" style="width:14px;height:14px"></i></div>
+        <div id="poi-clear" class="map-chip"><i data-lucide="x" style="width:14px;height:14px"></i></div>
       </div>
     </div>
     <div style="flex:1"></div>
     <div id="map-card" style="margin:0 16px;padding:16px 18px;border-radius:24px;background:rgba(18,19,22,.86);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.08);box-shadow:0 20px 40px -16px rgba(0,0,0,.6);pointer-events:auto;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div id="map-card-head" onclick="App.mapCardToggle()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
         <div><div style="font-family:'Sora';font-weight:700;font-size:17px;color:#fff;" id="map-name">Boston Hills</div><div style="color:#7e8086;font-size:12px;margin-top:2px;" id="map-addr">0923 Boston · 90923</div></div>
-        <div style="color:#FF8A3D;font-size:13px;font-weight:700;" id="map-dist">3.3 km</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="color:#FF8A3D;font-size:13px;font-weight:700;" id="map-dist">3.3 km</div>
+          <i id="map-card-chev" data-lucide="chevron-down" style="width:19px;height:19px;color:#8a8c92;transition:transform .25s;"></i>
+        </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:9px;margin:13px 0;">
-        <div style="display:flex;align-items:center;gap:9px;color:#c8cace;font-size:12px;"><i data-lucide="route" style="width:15px;height:15px;color:#FF7A2E"></i><span data-i18n="map.eta" id="map-eta">190 km · 19 min to 100%</span></div>
-        <div style="display:flex;align-items:center;gap:9px;color:#c8cace;font-size:12px;"><i data-lucide="plug-zap" style="width:15px;height:15px;color:#FF7A2E"></i><span data-i18n="map.stations" id="map-stations">1 of 3 charging stations available</span></div>
+      <div id="map-card-body">
+        <div style="display:flex;flex-direction:column;gap:9px;margin:13px 0;">
+          <div style="display:flex;align-items:center;gap:9px;color:#c8cace;font-size:12px;"><i data-lucide="route" style="width:15px;height:15px;color:#FF7A2E"></i><span data-i18n="map.eta" id="map-eta">190 km · 19 min to 100%</span></div>
+          <div style="display:flex;align-items:center;gap:9px;color:#c8cace;font-size:12px;"><i data-lucide="plug-zap" style="width:15px;height:15px;color:#FF7A2E"></i><span data-i18n="map.stations" id="map-stations">1 of 3 charging stations available</span></div>
+        </div>
+        <div class="obtn" id="map-go-btn" onclick="App.mapCardCollapse()" style="height:46px;border-radius:15px;font-size:15px;"><span data-i18n="map.go">Let's Go</span><i data-lucide="arrow-right" style="width:17px;height:17px"></i></div>
       </div>
-      <div class="obtn" style="height:46px;border-radius:15px;font-size:15px;"><span data-i18n="map.go">Let's Go</span><i data-lucide="arrow-right" style="width:17px;height:17px"></i></div>
     </div>
     <div class="bnav" style="position:relative;background:linear-gradient(to top,rgba(10,11,13,.96) 30%,rgba(10,11,13,0));padding:12px 30px 24px;pointer-events:auto;">
       <div class="ni" onclick="App.go('home')"><i data-lucide="layout-grid" style="width:22px;height:22px"></i></div>
@@ -1008,6 +1017,23 @@ const App = {
     history.replaceState({ screen }, '');
     lucide.createIcons();
     this.applyLang();
+  },
+
+  // Map destination card: collapse to a compact bar after "Let's Go", and
+  // toggle it back to full size by tapping the header (chevron).
+  mapCardToggle() {
+    const body = document.getElementById('map-card-body');
+    const chev = document.getElementById('map-card-chev');
+    if (!body) return;
+    const collapsed = body.style.display === 'none';
+    body.style.display = collapsed ? '' : 'none';
+    if (chev) chev.style.transform = collapsed ? 'rotate(0deg)' : 'rotate(180deg)';
+  },
+  mapCardCollapse() {
+    const body = document.getElementById('map-card-body');
+    const chev = document.getElementById('map-card-chev');
+    if (body) body.style.display = 'none';
+    if (chev) chev.style.transform = 'rotate(180deg)';
   },
 
   // Remove the boot splash (once auth state is resolved).
