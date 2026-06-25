@@ -63,6 +63,9 @@ let destMarker = null;
 let routeLine = null;
 let lastRangeKm = 0; // latest live driving range, for the route reach calculator
 let poiMarkers = [];
+let destPoint = null; // current destination {lat,lng,name}
+let routeStops = []; // intermediate stops (charging/fuel) [{lat,lng,name}]
+let stopMarkers = []; // leaflet markers for the intermediate stops
 
 if (!CFG.firebase) {
   console.info("VoltDrive: live mode OFF (no config) — running in demo mode.");
@@ -1241,6 +1244,9 @@ function renderResults(list) {
 function setDestination(lat, lng, name) {
   ensureMap();
   if (destMarker) leafletMap.removeLayer(destMarker);
+  destPoint = { lat: +lat, lng: +lng, name };
+  routeStops = []; // a new destination clears any intermediate stops
+  clearStopMarkers();
   destMarker = L.marker([lat, lng], {
     icon: L.divIcon({
       className: "",
@@ -1249,16 +1255,51 @@ function setDestination(lat, lng, name) {
     }),
   }).addTo(leafletMap);
   set("map-name", name);
-  routeTo(lat, lng);
+  rebuildRoute();
 }
 
-// Fastest driving route via OSRM, drawn on the map.
-async function routeTo(dlat, dlng) {
+// Pick a charging/fuel station from the map. With no destination yet the
+// station becomes the destination; if a destination is already set, it is
+// inserted as an extra stop (waypoint) along the way.
+function addStop(lat, lng, name) {
+  const uz = window.App?.lang === "uz";
+  lat = +lat; lng = +lng;
+  if (!destPoint) { setDestination(lat, lng, name); return; }
+  if (routeStops.some((s) => Math.abs(s.lat - lat) < 1e-6 && Math.abs(s.lng - lng) < 1e-6)) return;
+  if (routeStops.length >= 3) { toast(uz ? "Ko'pi bilan 3 ta to'xtash" : "Up to 3 stops"); return; }
+  routeStops.push({ lat, lng, name });
+  addStopMarker(lat, lng, name, routeStops.length);
+  rebuildRoute();
+  toast(uz ? `Qo'shimcha to'xtash · ${name}` : `Stop added · ${name}`, "ok");
+}
+
+function addStopMarker(lat, lng, name, idx) {
+  const m = L.marker([lat, lng], {
+    icon: L.divIcon({
+      className: "",
+      html: `<div style="width:22px;height:22px;border-radius:50%;background:#15171b;border:2px solid #FF8A2B;color:#FF8A2B;font:700 11px 'Sora',sans-serif;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.5)">${idx}</div>`,
+      iconSize: [22, 22], iconAnchor: [11, 11],
+    }),
+  }).addTo(leafletMap);
+  m.bindPopup(escapeHtml(name));
+  stopMarkers.push(m);
+}
+
+function clearStopMarkers() {
+  stopMarkers.forEach((m) => leafletMap && leafletMap.removeLayer(m));
+  stopMarkers = [];
+}
+
+// Fastest driving route via OSRM: current location → stops → destination.
+async function rebuildRoute() {
+  if (!destPoint) return;
   const from = deviceLoc || lastLoc || { lat: 41.311081, lng: 69.240562 };
   const uz = window.App?.lang === "uz";
   toast(uz ? "Yo'l qurilmoqda…" : "Routing…");
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${dlng},${dlat}?overview=full&geometries=geojson`;
+    const pts = [from, ...routeStops, destPoint];
+    const coords = pts.map((p) => `${p.lng},${p.lat}`).join(";");
+    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
     const d = await (await fetch(url)).json();
     if (!d.routes || !d.routes.length) { toast(uz ? "Yo'l topilmadi" : "No route"); return; }
     const rt = d.routes[0];
@@ -1268,7 +1309,8 @@ async function routeTo(dlat, dlng) {
     const kmNum = rt.distance / 1000;
     const km = kmNum.toFixed(1), min = Math.round(rt.duration / 60);
     set("map-dist", km + " km");
-    set("map-eta", `${km} km · ${min} ${uz ? "daqiqa" : "min"}`, true);
+    const stopTxt = routeStops.length ? ` · ${routeStops.length} ${uz ? "to'xtash" : "stop"}` : "";
+    set("map-eta", `${km} km · ${min} ${uz ? "daqiqa" : "min"}${stopTxt}`, true);
     showReach(kmNum);
   } catch (_) { toast(uz ? "Yo'l xatosi" : "Route error"); }
 }
@@ -1318,7 +1360,21 @@ async function loadPOI(kind) {
       const m = L.marker([it.lat, it.lng], {
         icon: L.divIcon({ className: "", html: `<div class="vd-poi">${ic}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
       }).addTo(leafletMap);
-      m.bindPopup(`${escapeHtml(it.name)} · ${it.d.toFixed(1)} km`);
+      m.bindPopup(
+        `<div style="text-align:center;font-family:'Manrope',system-ui;min-width:132px;">` +
+        `<div style="font-weight:700;margin-bottom:8px;font-size:13px;">${escapeHtml(it.name)} · ${it.d.toFixed(1)} km</div>` +
+        `<button class="vd-go" style="width:100%;border:0;border-radius:9px;padding:8px 10px;background:linear-gradient(135deg,#FF8A2B,#FF4D00);color:#fff;font-weight:700;font-size:12px;cursor:pointer;"></button>` +
+        `</div>`
+      );
+      m.on("popupopen", (e) => {
+        const root = e.popup.getElement();
+        const btn = root && root.querySelector(".vd-go");
+        if (!btn) return;
+        btn.textContent = destPoint
+          ? (uz ? "+ Qo'shimcha to'xtash" : "+ Add stop")
+          : (uz ? "▶ Yo'l ko'rsat" : "▶ Route");
+        btn.onclick = () => { addStop(it.lat, it.lng, it.name); leafletMap.closePopup(); };
+      });
       poiMarkers.push(m);
     });
     if (items.length) {
@@ -1337,6 +1393,8 @@ function clearPOI() {
 
 function clearRoute() {
   clearPOI();
+  clearStopMarkers();
+  destPoint = null; routeStops = [];
   if (routeLine) { leafletMap.removeLayer(routeLine); routeLine = null; }
   if (destMarker) { leafletMap.removeLayer(destMarker); destMarker = null; }
   document.querySelectorAll(".map-chip").forEach((c) => c.classList.remove("on"));
