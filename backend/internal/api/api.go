@@ -18,6 +18,7 @@ import (
 
 	"voltdrive/backend/internal/admins"
 	"voltdrive/backend/internal/auth"
+	"voltdrive/backend/internal/branding"
 	"voltdrive/backend/internal/devices"
 	"voltdrive/backend/internal/fleet"
 	"voltdrive/backend/internal/geofence"
@@ -46,6 +47,7 @@ type Server struct {
 	Admins           *admins.Store       // optional: additional admin emails (super = OwnerEmail)
 	Users            *users.Store        // optional: sign-in directory (admin user list)
 	Fleets           *fleet.Store        // optional: per-operator fleet dashboard
+	Branding         *branding.Store     // optional: white-label theme (super-admin editable)
 	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
 	AllowedOrigins   []string            // CORS allowlist (empty = permissive "*")
 	OwnerEmail       string              // bootstrap fleet owner (full access without a Firestore grant)
@@ -154,6 +156,13 @@ func (s *Server) Routes() http.Handler {
 	if s.Fleets != nil {
 		mux.HandleFunc("GET /v1/fleet", s.guardUser(s.handleFleetGet))
 		mux.HandleFunc("PUT /v1/fleet", s.guardUser(s.handleFleetPut))
+	}
+
+	// White-label branding: public read (so the app themes before login),
+	// super-admin write (the branding panel).
+	if s.Branding != nil {
+		mux.HandleFunc("GET /v1/branding", s.handleBrandingGet)
+		mux.HandleFunc("PUT /v1/admin/branding", s.guardUser(s.handleBrandingPut))
 	}
 
 	// Real-time telemetry stream (WebSocket).
@@ -948,6 +957,37 @@ func (s *Server) handleAdminStats(w http.ResponseWriter, r *http.Request, user a
 		}
 	}
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func (s *Server) handleBrandingGet(w http.ResponseWriter, r *http.Request) {
+	b, ok, err := s.Branding.Get(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load branding")
+		return
+	}
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]any{}) // none set → app keeps its config default
+		return
+	}
+	writeJSON(w, http.StatusOK, b)
+}
+
+func (s *Server) handleBrandingPut(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isSuperAdmin(user) {
+		writeErr(w, http.StatusForbidden, "super admin only")
+		return
+	}
+	var b branding.Branding
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&b); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if err := s.Branding.Put(r.Context(), b); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not save branding")
+		return
+	}
+	audit(r, user, "branding", "branding:update", nil)
+	writeJSON(w, http.StatusOK, b)
 }
 
 // maskCode redacts all but the first two characters of a guest code so the

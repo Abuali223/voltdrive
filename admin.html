@@ -73,6 +73,7 @@
       <div class="tab" data-f="all">Hammasi</div>
       <div class="tab" data-f="users">👥 Foydalanuvchilar</div>
       <div class="tab" data-f="stats">📊 Statistika</div>
+      <div class="tab" id="tab-branding" data-f="branding" style="display:none;">🎨 Branding</div>
       <button class="btn ghost sm" id="refresh" style="margin-left:auto;">↻ Yangilash</button>
     </div>
     <div id="list"></div>
@@ -107,10 +108,11 @@ $("refresh").onclick = load;
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
   t.classList.add("on"); filter = t.dataset.f;
-  const hideSuper = (filter === "users" || filter === "stats");
+  const hideSuper = (filter === "users" || filter === "stats" || filter === "branding");
   $("super").style.display = (!hideSuper && $("super").dataset.allowed === "1") ? "block" : "none";
   if (filter === "users") loadUsers();
   else if (filter === "stats") loadStats();
+  else if (filter === "branding") loadBranding();
   else render();
 });
 
@@ -189,7 +191,8 @@ async function loadAdmins() {
     const d = await r.json();
     superEmail = (d.super || "").toLowerCase();
     $("super").dataset.allowed = "1";
-    if (filter !== "users") $("super").style.display = "block";
+    $("tab-branding").style.display = ""; // super admin → show Branding tab
+    if (filter !== "users" && filter !== "stats" && filter !== "branding") $("super").style.display = "block";
     renderAdmins(d.admins || []);
   } catch (e) {}
 }
@@ -282,6 +285,46 @@ function renderStats(s) {
       <div style="font-family:'Sora';font-weight:800;font-size:30px;color:#fff;">${fmt(revenue)} <span style="font-size:15px;color:#8a8c92;">so'm</span></div>
     </div>
     <div class="card"><h2 style="margin-bottom:10px;">Tariflar bo'yicha</h2>${tierRows}</div>`;
+}
+
+// --- White-label branding panel ---
+async function loadBranding() {
+  $("list").innerHTML = `<div class="empty">Yuklanmoqda…</div>`;
+  let b = {};
+  try { const r = await api("/v1/branding"); if (r.ok) b = await r.json(); } catch (e) {}
+  const v = (k, d) => (b[k] || d || "");
+  $("list").innerHTML = `
+    <div class="card">
+      <h2>🎨 Ilova brendi (White-label)</h2>
+      <p class="muted" style="margin-bottom:14px;">O'zgartirishlar barcha foydalanuvchilarга darhol qo'llanadi — config tahrirlash shart emas.</p>
+      <label class="muted">Nom</label>
+      <input id="b-name" placeholder="VoltDrive" value="${v('name')}" style="margin:6px 0 14px;">
+      <label class="muted">Tagline</label>
+      <input id="b-tag" placeholder="Smart EV Control" value="${v('tagline')}" style="margin:6px 0 14px;">
+      <label class="muted">Logo URL (ixtiyoriy)</label>
+      <input id="b-logo" placeholder="https://.../logo.png" value="${v('logo')}" style="margin:6px 0 16px;">
+      <div class="row" style="gap:18px;">
+        <div><div class="muted" style="margin-bottom:6px;">Asosiy (och)</div><input type="color" id="b-acc" value="${v('accent','#FF8A2B')}" style="width:56px;height:40px;padding:2px;"></div>
+        <div><div class="muted" style="margin-bottom:6px;">Asosiy (to'q)</div><input type="color" id="b-acc2" value="${v('accent2','#FF4D00')}" style="width:56px;height:40px;padding:2px;"></div>
+        <div><div class="muted" style="margin-bottom:6px;">Matn/ikona</div><input type="color" id="b-accs" value="${v('accentSolid','#FF8A3D')}" style="width:56px;height:40px;padding:2px;"></div>
+      </div>
+      <div class="row" style="margin-top:18px;gap:10px;">
+        <button class="btn" id="b-save">Saqlash</button>
+        <button class="btn ghost" id="b-reset">Standartga qaytarish</button>
+      </div>
+      <div id="b-msg" class="muted" style="margin-top:10px;"></div>
+    </div>`;
+  $("b-save").onclick = () => saveBranding();
+  $("b-reset").onclick = () => saveBranding(true);
+}
+async function saveBranding(reset) {
+  const body = reset ? { name: "", tagline: "", logo: "", accent: "", accent2: "", accentSolid: "" } : {
+    name: $("b-name").value.trim(), tagline: $("b-tag").value.trim(), logo: $("b-logo").value.trim(),
+    accent: $("b-acc").value, accent2: $("b-acc2").value, accentSolid: $("b-accs").value,
+  };
+  const r = await api("/v1/admin/branding", { method: "PUT", body: JSON.stringify(body) });
+  $("b-msg").textContent = r.ok ? "Saqlandi ✓ (ilovani yangilang)" : "Xato: " + r.status;
+  $("b-msg").style.color = r.ok ? "#43d684" : "#ff8a8a";
 }
 
 async function activate(uid) {

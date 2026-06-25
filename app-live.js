@@ -77,6 +77,23 @@ setupInstallPrompt();
 wireExtras();
 setupA11y();
 applyBranding();
+loadRemoteBranding(); // pull super-admin-set white-label theme (if any)
+
+// Fetch the saved white-label theme from the backend and re-apply it, so a
+// dealer's branding (set in the admin panel) themes the app for everyone.
+async function loadRemoteBranding() {
+  if (!CFG.apiBase) return;
+  try {
+    const r = await fetch(`${CFG.apiBase}/v1/branding`);
+    if (!r.ok) return;
+    const b = await r.json();
+    const clean = Object.fromEntries(Object.entries(b || {}).filter(([, v]) => v !== "" && v != null));
+    if (Object.keys(clean).length) {
+      CFG.branding = { ...(CFG.branding || {}), ...clean };
+      applyBranding();
+    }
+  } catch (e) {}
+}
 
 // setupA11y makes the div-based controls keyboard- and screen-reader-friendly:
 // it tags clickable elements with role="button" + tabindex and lets Enter/Space
