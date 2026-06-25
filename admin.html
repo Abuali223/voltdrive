@@ -2,7 +2,7 @@
 <html lang="uz">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>VoltDrive — Admin</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -25,9 +25,9 @@
   .btn.red{background:rgba(255,80,80,.14);border:1px solid rgba(255,80,80,.35);color:#ff8a8a;box-shadow:none;}
   .card{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.025));border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:16px;margin-bottom:12px;box-shadow:0 16px 44px -26px rgba(0,0,0,.85);}
   .me{color:#8a8c92;font-size:13px;overflow-wrap:anywhere;}
-  .tabs{display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
-  .tabs::-webkit-scrollbar{display:none;}
-  .tab{flex:0 0 auto;white-space:nowrap;padding:9px 15px;border-radius:11px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);font-size:13px;font-weight:600;color:#bcbdc4;transition:background .15s;}
+  .tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+  .tab{flex:0 0 auto;white-space:nowrap;padding:9px 14px;border-radius:11px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);font-size:13px;font-weight:600;color:#bcbdc4;transition:background .15s;}
+  #refresh{margin-left:auto;}
   .tab.on{background:linear-gradient(150deg,#FF8A2B,#FF4D00);color:#fff;border-color:transparent;}
   .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
   .row > div:first-child{flex:1 1 auto;min-width:0;}
