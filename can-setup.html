@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoltDrive — CAN qurilmani ulashdan ishga tushirishgacha</title>
+<meta name="description" content="CAN qurilma qanday ulanadi va VoltDrive dasturida qanday ishga tushadi — qadamba-qadam.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --o1:#FF8A2B; --o2:#FF4D00; --ink:#0a0b0d; --ink2:#121317;
+    --txt:#f4f5f7; --mut:#9a9ca4; --line:rgba(255,255,255,.09);
+    --grad:linear-gradient(135deg,#FF8A2B,#FF4D00);
+    --cyan:#34d6e8; --green:#3ddc84; --violet:#9a7bff;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;background:var(--ink);color:var(--txt);
+    font-family:'Manrope',system-ui,sans-serif;}
+  h1,h2,h3,.sora{font-family:'Sora',sans-serif;}
+
+  .bg{position:fixed;inset:0;z-index:0;overflow:hidden;background:
+     radial-gradient(120% 90% at 50% -10%,#1d1e23 0%,#0d0e11 55%,#08090b 100%);}
+  .orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:.5;mix-blend-mode:screen;}
+  .orb.a{width:520px;height:520px;background:radial-gradient(circle,#FF6A1A,transparent 70%);top:-160px;left:-120px;animation:float1 16s ease-in-out infinite;}
+  .orb.b{width:460px;height:460px;background:radial-gradient(circle,#FF3D00,transparent 70%);bottom:-180px;right:-120px;animation:float2 20s ease-in-out infinite;}
+  .orb.c{width:340px;height:340px;background:radial-gradient(circle,#1e8fff,transparent 70%);top:40%;left:55%;opacity:.22;animation:float1 24s ease-in-out infinite reverse;}
+  @keyframes float1{0%,100%{transform:translate(0,0)}50%{transform:translate(60px,40px)}}
+  @keyframes float2{0%,100%{transform:translate(0,0)}50%{transform:translate(-50px,-40px)}}
+  .grid-bg{position:absolute;inset:0;opacity:.04;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:46px 46px;mask:radial-gradient(circle at 50% 40%,#000,transparent 80%);}
+
+  .deck{position:relative;z-index:2;height:100%;}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:6vh 7vw;opacity:0;pointer-events:none;transform:scale(.98);transition:opacity .5s ease,transform .5s ease;overflow-y:auto;}
+  .slide.active{opacity:1;pointer-events:auto;transform:none;}
+  [data-r]{opacity:0;transform:translateY(26px);transition:opacity .6s cubic-bezier(.2,.7,.2,1),transform .6s cubic-bezier(.2,.7,.2,1);}
+  .slide.active [data-r]{opacity:1;transform:none;}
+
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--o1);margin-bottom:16px;}
+  .kicker::before{content:"";width:26px;height:2px;background:var(--grad);border-radius:2px;}
+  h1{font-size:clamp(30px,5.2vw,66px);font-weight:800;line-height:1.05;letter-spacing:-1.5px;}
+  h2{font-size:clamp(25px,3.8vw,46px);font-weight:800;line-height:1.1;letter-spacing:-1px;}
+  .lead{font-size:clamp(14px,1.9vw,20px);color:var(--mut);max-width:800px;line-height:1.6;margin-top:16px;}
+  .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+
+  .logo{display:flex;align-items:center;gap:14px;}
+  .bolt{width:62px;height:62px;border-radius:18px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 14px 36px -8px rgba(255,90,0,.7);animation:glow 2.4s ease-in-out infinite;}
+  @keyframes glow{0%,100%{box-shadow:0 14px 36px -10px rgba(255,90,0,.55);transform:translateY(0)}50%{box-shadow:0 22px 50px -8px rgba(255,90,0,.9);transform:translateY(-3px)}}
+  .logo .nm{font-family:'Sora';font-weight:800;font-size:30px;letter-spacing:-.5px;}
+
+  .grid{display:grid;gap:14px;margin-top:26px;}
+  .g2{grid-template-columns:repeat(2,1fr);} .g3{grid-template-columns:repeat(3,1fr);} .g4{grid-template-columns:repeat(4,1fr);}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid var(--line);border-radius:18px;padding:18px 16px;transition:transform .3s,border-color .3s,background .3s;}
+  .card:hover{transform:translateY(-6px);border-color:rgba(255,138,43,.5);background:linear-gradient(180deg,rgba(255,138,43,.12),rgba(255,255,255,.02));}
+  .ico{width:44px;height:44px;border-radius:12px;background:rgba(255,138,43,.14);display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:11px;}
+  .ico.cy{background:rgba(52,214,232,.14);} .ico.gr{background:rgba(61,220,132,.14);} .ico.vi{background:rgba(154,123,255,.14);}
+  .card h4{font-family:'Sora';font-size:15px;font-weight:700;margin-bottom:5px;}
+  .card p{font-size:12.5px;color:var(--mut);line-height:1.5;}
+
+  /* journey bar */
+  .journey{display:flex;gap:10px;margin-top:32px;flex-wrap:wrap;}
+  .jstage{flex:1;min-width:130px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid var(--line);border-radius:16px;padding:16px 14px;position:relative;}
+  .jstage .jn{font-family:'Sora';font-weight:800;font-size:13px;color:var(--o1);letter-spacing:1px;}
+  .jstage h4{font-family:'Sora';font-size:15px;margin:8px 0 5px;}
+  .jstage p{font-size:11.5px;color:var(--mut);line-height:1.45;}
+  .jstage .ji{font-size:24px;}
+  .jstage::after{content:"›";position:absolute;right:-12px;top:50%;transform:translateY(-50%);color:var(--o1);font-size:22px;font-weight:800;z-index:3;}
+  .jstage:last-child::after{display:none;}
+
+  /* step sequence */
+  .seq{display:flex;flex-direction:column;gap:0;margin-top:22px;max-width:920px;}
+  .step{display:flex;gap:18px;align-items:flex-start;padding:13px 0;position:relative;}
+  .step .sn{flex:0 0 auto;width:40px;height:40px;border-radius:12px;background:var(--grad);color:#1a0e06;font-family:'Sora';font-weight:800;font-size:17px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px -6px rgba(255,90,0,.6);}
+  .step:not(:last-child)::before{content:"";position:absolute;left:19px;top:53px;bottom:-4px;width:2px;background:linear-gradient(var(--o1),transparent);}
+  .step .sc h4{font-family:'Sora';font-size:15.5px;font-weight:700;}
+  .step .sc p{font-size:13px;color:var(--mut);line-height:1.5;margin-top:3px;}
+  .step .sc code{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--cyan);background:rgba(52,214,232,.1);padding:2px 7px;border-radius:6px;}
+
+  /* two-model compare */
+  .models{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px;}
+  .model{border:1px solid var(--line);border-radius:18px;padding:20px;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015));}
+  .model.a{border-color:rgba(255,138,43,.35);} .model.b{border-color:rgba(52,214,232,.35);}
+  .model h3{font-family:'Sora';font-size:19px;display:flex;align-items:center;gap:10px;}
+  .tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;}
+  .tag.o{background:rgba(255,138,43,.16);color:var(--o1);} .tag.c{background:rgba(52,214,232,.16);color:var(--cyan);}
+  .miniflow{display:flex;align-items:center;gap:7px;margin:16px 0;flex-wrap:wrap;font-size:11.5px;}
+  .chip{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:9px;padding:7px 9px;font-weight:600;white-space:nowrap;}
+  .chip.hot{border-color:rgba(255,138,43,.5);color:var(--o1);} .chip.cool{border-color:rgba(52,214,232,.5);color:var(--cyan);}
+  .arr{color:var(--mut);}
+  .model ul{list-style:none;display:flex;flex-direction:column;gap:8px;margin-top:6px;}
+  .model li{font-size:12.5px;color:var(--mut);display:flex;gap:8px;line-height:1.4;}
+  .model li b{color:var(--txt);}
+  .pro{color:var(--green);} .con{color:#ff7a7a;}
+
+  /* code card */
+  .code{background:#0c0d11;border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin-top:22px;font-family:ui-monospace,Menlo,monospace;font-size:13px;line-height:1.65;overflow-x:auto;}
+  .code .c{color:#6b7280;} .code .k{color:#ff9d5c;} .code .s{color:#7ee0ef;} .code .f{color:#a7e3a0;}
+  .codecap{font-size:12.5px;color:var(--mut);margin-top:10px;}
+
+  /* checklist */
+  .check{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:24px;}
+  .check li{display:flex;gap:12px;align-items:flex-start;font-size:14.5px;line-height:1.45;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015));border:1px solid var(--line);border-radius:13px;padding:13px 15px;}
+  .check .ck{flex:0 0 auto;width:24px;height:24px;border-radius:7px;background:rgba(61,220,132,.16);color:var(--green);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;}
+  .check b{color:var(--txt);} .check span{color:var(--mut);font-size:12.5px;}
+
+  .stats{display:flex;gap:44px;flex-wrap:wrap;margin-top:32px;}
+  .stat .num{font-family:'Sora';font-weight:800;font-size:clamp(30px,4.6vw,52px);background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1;}
+  .stat .lbl{color:var(--mut);font-size:13px;margin-top:7px;font-weight:600;}
+
+  .progress{position:fixed;top:0;left:0;height:3px;background:var(--grad);z-index:30;transition:width .4s;box-shadow:0 0 12px rgba(255,90,0,.7);}
+  .nav{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:16px;background:rgba(16,17,20,.7);backdrop-filter:blur(12px);padding:8px 14px;border-radius:40px;border:1px solid var(--line);}
+  .nav button{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--txt);font-size:18px;cursor:pointer;transition:background .2s;display:flex;align-items:center;justify-content:center;}
+  .nav button:hover{background:rgba(255,138,43,.25);}
+  .dots{display:flex;gap:7px;} .dots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22);cursor:pointer;transition:all .25s;}
+  .dots i.on{background:var(--grad);width:22px;border-radius:4px;}
+  .count{position:fixed;top:20px;right:24px;z-index:30;font-family:'Sora';font-weight:700;font-size:13px;color:var(--mut);} .count b{color:var(--txt);}
+  .brandtag{position:fixed;top:18px;left:24px;z-index:30;display:flex;align-items:center;gap:9px;}
+  .brandtag .b{width:30px;height:30px;border-radius:9px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .brandtag .t{font-family:'Sora';font-weight:800;font-size:15px;}
+  .hint{position:fixed;bottom:24px;right:24px;z-index:30;color:var(--mut);font-size:12px;}
+
+  @media(max-width:860px){
+    .g3,.g4,.g2,.models,.check{grid-template-columns:1fr;} .journey{flex-direction:column;}
+    .jstage::after{content:"⌄";right:50%;top:auto;bottom:-14px;transform:translateX(50%);}
+    .stats{gap:26px;} .hint,.brandtag{display:none;} .slide{padding:8vh 6vw;}
+  }
+</style>
+</head>
+<body>
+
+<div class="bg"><div class="orb a"></div><div class="orb b"></div><div class="orb c"></div><div class="grid-bg"></div></div>
+<div class="progress" id="prog"></div>
+<div class="brandtag"><div class="b">⚡</div><div class="t">VoltDrive</div></div>
+<div class="count"><b id="cur">01</b> / <span id="tot">14</span></div>
+
+<div class="deck">
+
+  <!-- 1 Title -->
+  <section class="slide active">
+    <div class="logo" data-r><div class="bolt">⚡</div><div class="nm">VoltDrive</div></div>
+    <div class="kicker" data-r style="margin-top:32px;">CAN qurilma · Ulanish va ishga tushirish</div>
+    <h1 data-r>Qurilmani <span class="grad">ulashdan</span><br>dasturni <span class="grad">ishga tushirishgacha</span></h1>
+    <p class="lead" data-r>Bitta qurilma mashinaga o'rnatiladi, bizning serverga ulanadi, mashina modeli
+      sozlanadi va VoltDrive ilovasida tugma bosish bilan ishlaydi. Mana to'liq yo'l — qadamba-qadam.</p>
+    <div class="stats">
+      <div class="stat" data-r><div class="num">5</div><div class="lbl">Asosiy bosqich</div></div>
+      <div class="stat" data-r><div class="num">~30 min</div><div class="lbl">Bitta mashinani o'rnatish</div></div>
+      <div class="stat" data-r><div class="num">1–3 s</div><div class="lbl">Komanda javobi</div></div>
+    </div>
+  </section>
+
+  <!-- 2 Journey overview -->
+  <section class="slide">
+    <div class="kicker" data-r>Umumiy yo'l xaritasi</div>
+    <h2 data-r>Besh <span class="grad">bosqich</span></h2>
+    <div class="journey">
+      <div class="jstage" data-r><div class="ji">🔌</div><div class="jn">BOSQICH 1</div><h4>Ulash</h4><p>Qurilma mashinaga o'rnatiladi (CAN/OBD), SIM + quvvat.</p></div>
+      <div class="jstage" data-r><div class="ji">📡</div><div class="jn">BOSQICH 2</div><h4>Serverga</h4><p>Qurilma internetga chiqib bizning serverga ro'yxatdan o'tadi.</p></div>
+      <div class="jstage" data-r><div class="ji">⚙️</div><div class="jn">BOSQICH 3</div><h4>Sozlash</h4><p>Model aniqlanadi, CAN profili kalibrlanadi, test.</p></div>
+      <div class="jstage" data-r><div class="ji">🔗</div><div class="jn">BOSQICH 4</div><h4>Bog'lash</h4><p>Foydalanuvchi ilovada mashinani qo'shadi, obuna faollashadi.</p></div>
+      <div class="jstage" data-r><div class="ji">🚀</div><div class="jn">BOSQICH 5</div><h4>Ishlatish</h4><p>Tugma → mashina javob beradi, jonli telemetriya.</p></div>
+    </div>
+    <p class="lead" data-r style="margin-top:24px;">1–3 bosqich — bir martalik (o'rnatish va integratsiya). 4–5 — har foydalanuvchi uchun, soniyalarda.</p>
+  </section>
+
+  <!-- 3 Stage 1: physical install -->
+  <section class="slide">
+    <div class="kicker" data-r>Bosqich 1 — Ulash</div>
+    <h2 data-r>Qurilma mashinaga qanday <span class="grad">o'rnatiladi</span></h2>
+    <div class="grid g3">
+      <div class="card" data-r><div class="ico">🔧</div><h4>1. Ulanish nuqtasi</h4><p><b>OBD-II port</b> (tez, eng oson) yoki to'g'ridan <b>CAN simlari</b> (CAN-H / CAN-L) ga ulanadi.</p></div>
+      <div class="card" data-r><div class="ico cy">🔋</div><h4>2. Quvvat</h4><p>+12V, GND. Qurilma doimiy quvvatlanadi, mashina o'chsa ham uxlash rejimida ishlaydi.</p></div>
+      <div class="card" data-r><div class="ico gr">📶</div><h4>3. SIM + GPS</h4><p>Ichida 4G/LTE SIM (internet) va GPS antenna — joylashuv uchun.</p></div>
+    </div>
+    <div class="grid g3" style="margin-top:14px;">
+      <div class="card" data-r><div class="ico vi">🧰</div><h4>Kim o'rnatadi</h4><p>Sertifikatlangan usta — 15–30 daqiqa. Bir marta.</p></div>
+      <div class="card" data-r><div class="ico">🔒</div><h4>Yashirin joy</h4><p>Panel ostiga yashiriladi — o'g'rilarga ko'rinmaydi.</p></div>
+      <div class="card" data-r><div class="ico cy">✅</div><h4>Tekshirish</h4><p>Indikator yonadi — qurilma CAN'ni o'qiy boshladi.</p></div>
+    </div>
+    <p class="lead" data-r style="margin-top:18px;">Natija: qurilma endi mashinaning ichki tarmog'iga "ulangan" va internetga chiqishga tayyor.</p>
+  </section>
+
+  <!-- 4 Stage 2: connect to server -->
+  <section class="slide">
+    <div class="kicker" data-r>Bosqich 2 — Serverga ulanish</div>
+    <h2 data-r>Qurilma bizning serverni <span class="grad">qanday topadi</span></h2>
+    <div class="seq">
+      <div class="step" data-r><div class="sn">1</div><div class="sc"><h4>Yoqiladi va internetga chiqadi</h4><p>SIM karta orqali mobil internetga ulanadi (operator tarmog'i).</p></div></div>
+      <div class="step" data-r><div class="sn">2</div><div class="sc"><h4>O'zini tanishtiradi</h4><p>Har qurilmaning noyob <code>IMEI</code> va maxfiy kaliti bor — server shu orqali uni taniydi.</p></div></div>
+      <div class="step" data-r><div class="sn">3</div><div class="sc"><h4>Doimiy kanal ochadi</h4><p>Server bilan uzluksiz aloqa o'rnatadi — komandalar darhol yetib boradi, telemetriya doimiy oqadi.</p></div></div>
+      <div class="step" data-r><div class="sn">4</div><div class="sc"><h4>Ro'yxatdan o'tadi</h4><p>Server bazaga yozadi: <code>device_id · IMEI · holat: online</code>. Endi qurilma "ko'rinadi".</p></div></div>
+    </div>
+    <p class="lead" data-r style="margin-top:14px;">Ulanishning 2 xil yo'li bor — keyingi slaydda.</p>
+  </section>
+
+  <!-- 5 Two connection models -->
+  <section class="slide">
+    <div class="kicker" data-r>Ikki integratsiya modeli</div>
+    <h2 data-r>Qurilma serverga <span class="grad">qaysi yo'l</span> bilan ulanadi</h2>
+    <div class="models">
+      <div class="model a" data-r>
+        <h3>☁️ Bulut API <span class="tag o">StarLine / Pandora</span></h3>
+        <div class="miniflow">
+          <span class="chip">🔒 Qurilma</span><span class="arr">→</span>
+          <span class="chip">☁️ Brend buluti</span><span class="arr">→</span>
+          <span class="chip hot">VoltDrive server</span><span class="arr">→</span>
+          <span class="chip">📱 Ilova</span>
+        </div>
+        <ul>
+          <li class="pro">＋</li><li><b>Tez ishga tushadi.</b> Tayyor API — biz faqat ulanamiz.</li>
+          <li class="pro">＋</li><li><b>Boy boshqaruv</b> tayyor (start, quluf, klimat).</li>
+          <li class="con">－</li><li>Ma'lumot brend buluti orqali o'tadi.</li>
+        </ul>
+      </div>
+      <div class="model b" data-r>
+        <h3>🖥️ To'g'ridan server <span class="tag c">Teltonika / Concox</span></h3>
+        <div class="miniflow">
+          <span class="chip">🔒 Qurilma</span><span class="arr">→</span>
+          <span class="chip cool">VoltDrive server (TCP)</span><span class="arr">→</span>
+          <span class="chip">📱 Ilova</span>
+        </div>
+        <ul>
+          <li class="pro">＋</li><li><b>To'liq mustaqil.</b> Qurilma to'g'ridan bizning serverga ulanadi (Codec8/TCP).</li>
+          <li class="pro">＋</li><li><b>Maxfiylik bizda</b> — uchinchi bulut yo'q.</li>
+          <li class="con">－</li><li>CAN komandalarini o'zimiz yozamiz (ko'proq ish).</li>
+        </ul>
+      </div>
+    </div>
+    <p class="lead" data-r style="margin-top:16px;">Boshlash: <b class="grad">StarLine (bulut API)</b> — tez. Fleet/mustaqillik uchun: <b class="grad">Teltonika (o'z server)</b>.</p>
+  </section>
+
+  <!-- 6 How our backend plugs in -->
+  <section class="slide">
+    <div class="kicker" data-r>Bizning tomonimiz</div>
+    <h2 data-r>Backend qanday <span class="grad">ulanadi</span></h2>
+    <p class="lead" data-r style="margin-top:6px;">Har qurilma turi uchun bitta "adapter" yoziladi. Ilova va server qismi <b>allaqachon tayyor</b> —
+      yangi qurilma qo'shilsa, faqat shu adapter qo'shiladi.</p>
+    <div class="code" data-r>
+<span class="c">// Har bir qurilma turi shu interfeysни bajaradi</span><br>
+<span class="k">type</span> Provider <span class="k">interface</span> {<br>
+&nbsp;&nbsp;Lock(carID <span class="k">string</span>) <span class="k">error</span><br>
+&nbsp;&nbsp;Unlock(carID <span class="k">string</span>) <span class="k">error</span><br>
+&nbsp;&nbsp;StartEngine(carID <span class="k">string</span>) <span class="k">error</span><br>
+&nbsp;&nbsp;SetClimate(carID <span class="k">string</span>, temp <span class="k">int</span>) <span class="k">error</span><br>
+&nbsp;&nbsp;Telemetry(carID <span class="k">string</span>) (State, <span class="k">error</span>)<br>
+}<br><br>
+<span class="c">// Qurilmaga qarab mos adapter tanlanadi</span><br>
+provider := <span class="f">starline</span>.New(apiKey)&nbsp;&nbsp;<span class="c">// yoki teltonika.New(...)</span>
+    </div>
+    <p class="codecap" data-r>Ilova bir xil tugmani bosadi → server <code style="color:var(--cyan)">provider.Unlock()</code> ni chaqiradi →
+      adapter qurilma "tili"ga o'giradi. Yangi brend = yangi adapter, qolgani o'zgarmaydi.</p>
+  </section>
+
+  <!-- 7 Stage 3: calibration -->
+  <section class="slide">
+    <div class="kicker" data-r>Bosqich 3 — Sozlash</div>
+    <h2 data-r>Mashina modelini <span class="grad">kalibrlash</span></h2>
+    <div class="seq">
+      <div class="step" data-r><div class="sn">1</div><div class="sc"><h4>Model aniqlanadi</h4><p>Masalan "Voyah Free 2024". Shu model uchun CAN xabarlari (qaysi ID nima qiladi) belgilanadi.</p></div></div>
+      <div class="step" data-r><div class="sn">2</div><div class="sc"><h4>CAN profili tanlanadi</h4><p>Agar profil bor bo'lsa — darhol ishlaydi. Yangi model bo'lsa — bir marta xaritalanadi <code>ID 0x250 = eshik</code>.</p></div></div>
+      <div class="step" data-r><div class="sn">3</div><div class="sc"><h4>Komandalar test qilinadi</h4><p>Lock/Unlock/Start — har biri sinaladi va tasdiqlanadi.</p></div></div>
+      <div class="step" data-r><div class="sn">4</div><div class="sc"><h4>Profil saqlanadi</h4><p>Endi shu modeldagi <b>har</b> mashina avtomatik ishlaydi — qayta kalibrlash shart emas.</p></div></div>
+    </div>
+    <p class="lead" data-r style="margin-top:12px;">Har yangi model bir marta sozlanadi — keyin kutubxonaga qo'shiladi va qayta ishlatiladi.</p>
+  </section>
+
+  <!-- 8 Stage 4: app binding -->
+  <section class="slide">
+    <div class="kicker" data-r>Bosqich 4 — Ilovaga bog'lash</div>
+    <h2 data-r>Foydalanuvchi mashinani <span class="grad">qanday qo'shadi</span></h2>
+    <div class="grid g4">
+      <div class="card" data-r><div class="ico">📲</div><h4>1. Ilovani ochadi</h4><p>"Mashina qo'shish" tugmasini bosadi.</p></div>
+      <div class="card" data-r><div class="ico cy">🔢</div><h4>2. Qurilma ID</h4><p>QR-kod skanerlaydi yoki IMEI kiritadi.</p></div>
+      <div class="card" data-r><div class="ico gr">✅</div><h4>3. Egalik tasdiqi</h4><p>SMS/kod orqali mashina egasi ekani tasdiqlanadi.</p></div>
+      <div class="card" data-r><div class="ico vi">💳</div><h4>4. Obuna</h4><p>Obuna faollashadi — boshqaruv ochiladi.</p></div>
+    </div>
+    <p class="lead" data-r style="margin-top:20px;">Shu daqiqadan mashina ilovada paydo bo'ladi: holati, GPS'i va barcha tugmalari bilan.
+      Oilaviy kirish bo'lsa — egasi boshqalarni ham qo'sha oladi.</p>
+  </section>
+
+  <!-- 9 Stage 5: go live -->
+  <section class="slide">
+    <div class="kicker" data-r>Bosqich 5 — Ishga tushirish</div>
+    <h2 data-r>Birinchi <span class="grad">komanda</span></h2>
+    <div class="seq">
+      <div class="step" data-r><div class="sn">1</div><div class="sc"><h4>Foydalanuvchi "Ochish" ni bosadi</h4><p>Ilova serverga xavfsiz so'rov yuboradi.</p></div></div>
+      <div class="step" data-r><div class="sn">2</div><div class="sc"><h4>Server tekshiradi → qurilmaga</h4><p>Ruxsat (RBAC, obuna) tekshiriladi, jurnalga yoziladi, qurilmaga uzatiladi.</p></div></div>
+      <div class="step" data-r><div class="sn">3</div><div class="sc"><h4>Qurilma CAN'ga yozadi</h4><p>Mos CAN frame'i shinaga yuboriladi → eshik ECU bajaradi.</p></div></div>
+      <div class="step" data-r><div class="sn">4</div><div class="sc"><h4>Tasdiq qaytadi</h4><p>"✓ Ochildi" ilovada ko'rinadi. Jonli telemetriya (GPS, batareya) doimiy yangilanadi.</p></div></div>
+    </div>
+    <p class="lead" data-r style="margin-top:12px;">🎉 Tayyor — mashina endi to'liq masofadan boshqariladi.</p>
+  </section>
+
+  <!-- 10 Full end-to-end sequence -->
+  <section class="slide">
+    <div class="kicker" data-r>To'liq ko'rinish</div>
+    <h2 data-r>Boshidan oxirigacha <span class="grad">bir qarashda</span></h2>
+    <div class="code" data-r style="font-size:12.5px;">
+<span class="f">Qurilma</span> ──o'rnatish──▶ <span class="f">Mashina CAN-bus</span><br>
+&nbsp;&nbsp;&nbsp;│ (SIM / 4G)<br>
+&nbsp;&nbsp;&nbsp;▼<br>
+<span class="s">VoltDrive Server</span> ◀──ro'yxat (IMEI, kalit)<br>
+&nbsp;&nbsp;&nbsp;│ &nbsp;adapter: <span class="k">starline</span> / <span class="k">teltonika</span><br>
+&nbsp;&nbsp;&nbsp;│ &nbsp;CAN profil: <span class="k">"Voyah Free 2024"</span><br>
+&nbsp;&nbsp;&nbsp;▼<br>
+<span class="s">Firebase</span> (jonli holat) ◀──telemetriya<br>
+&nbsp;&nbsp;&nbsp;│<br>
+&nbsp;&nbsp;&nbsp;▼<br>
+<span class="f">📱 Ilova</span> ──tugma──▶ <span class="s">Server</span> ──▶ <span class="f">Qurilma</span> ──▶ <span class="f">Mashina ✓</span>
+    </div>
+    <p class="lead" data-r style="margin-top:16px;">Hammasi <b>bizning serverimiz</b> orqali — qurilmadan ilovagacha bitta uzluksiz, xavfsiz zanjir.</p>
+  </section>
+
+  <!-- 11 Checklist to go live -->
+  <section class="slide">
+    <div class="kicker" data-r>Ishga tushirish uchun kerak</div>
+    <h2 data-r>Tayyorlik <span class="grad">ro'yxati</span></h2>
+    <ul class="check">
+      <li data-r><span class="ck">✓</span><div><b>CAN qurilma</b> <span>— StarLine yoki Teltonika (mashinaga 1 ta)</span></div></li>
+      <li data-r><span class="ck">✓</span><div><b>SIM karta</b> <span>— internetli (qurilma ichida)</span></div></li>
+      <li data-r><span class="ck">✓</span><div><b>Server endpoint</b> <span>— qurilma ulanadigan manzil (bizда tayyor)</span></div></li>
+      <li data-r><span class="ck">✓</span><div><b>Provider adapter</b> <span>— qurilma turi uchun (bir marta yoziladi)</span></div></li>
+      <li data-r><span class="ck">✓</span><div><b>CAN profil</b> <span>— mashina modeli uchun (kutubxonaga qo'shiladi)</span></div></li>
+      <li data-r><span class="ck">✓</span><div><b>Ilova + obuna</b> <span>— allaqachon tayyor va ishlayapti ✅</span></div></li>
+    </ul>
+    <p class="lead" data-r style="margin-top:20px;">Dasturning hamma qismi tayyor — yetishmayotgani faqat <b class="grad">qurilmaning o'zi</b> (yo'lda).</p>
+  </section>
+
+  <!-- 12 Time & scale -->
+  <section class="slide">
+    <div class="kicker" data-r>Vaqt va miqyos</div>
+    <h2 data-r>Qancha <span class="grad">vaqt</span> oladi</h2>
+    <div class="grid g3">
+      <div class="card" data-r><div class="ico">⚙️</div><h4>Birinchi marta</h4><p>Adapter + 1-model profili: bir martalik integratsiya ishi.</p></div>
+      <div class="card" data-r><div class="ico cy">🔧</div><h4>Har mashina</h4><p>O'rnatish 15–30 daqiqa + ilovada qo'shish 2 daqiqa.</p></div>
+      <div class="card" data-r><div class="ico gr">📈</div><h4>Ko'payganda</h4><p>Profil bor modellar bir zumda — minglab mashinaga oson kengayadi.</p></div>
+    </div>
+    <div class="stats" data-r>
+      <div class="stat"><div class="num">1×</div><div class="lbl">Adapter / qurilma turi</div></div>
+      <div class="stat"><div class="num">1×</div><div class="lbl">Profil / model</div></div>
+      <div class="stat"><div class="num">∞</div><div class="lbl">Shu modeldagi mashinalar</div></div>
+    </div>
+  </section>
+
+  <!-- 13 Why it's reliable -->
+  <section class="slide">
+    <div class="kicker" data-r>Ishonchlilik</div>
+    <h2 data-r>Nega bu <span class="grad">barqaror</span> ishlaydi</h2>
+    <div class="grid g3">
+      <div class="card" data-r><div class="ico">🔁</div><h4>Qayta ulanish</h4><p>Aloqa uzilsa qurilma o'zi qayta ulanadi — komandalar yo'qolmaydi.</p></div>
+      <div class="card" data-r><div class="ico cy">🔐</div><h4>Shifrlash</h4><p>Qurilma↔server↔ilova — TLS. Komandalar imzolanadi.</p></div>
+      <div class="card" data-r><div class="ico gr">📜</div><h4>Jurnal</h4><p>Har komanda yoziladi: kim, qachon, natija.</p></div>
+      <div class="card" data-r><div class="ico vi">🚨</div><h4>Panik / Geofence</h4><p>O'g'irlik shubhasi — darhol bloklash va ogohlantirish.</p></div>
+      <div class="card" data-r><div class="ico">🛰️</div><h4>Uxlash rejimi</h4><p>Mashina o'chsa — qurilma kam quvvatda, GPS kuzatuvda.</p></div>
+      <div class="card" data-r><div class="ico cy">♻️</div><h4>Yangilanish</h4><p>Profil/adapter serverda yangilanadi — qurilmaga tegmasdan.</p></div>
+    </div>
+  </section>
+
+  <!-- 14 Closing -->
+  <section class="slide" style="text-align:center;align-items:center;">
+    <div class="logo" data-r style="justify-content:center;"><div class="bolt">⚡</div><div class="nm">VoltDrive</div></div>
+    <h1 data-r style="margin-top:28px;">Ulash → Server → Sozlash<br>→ Bog'lash → <span class="grad">Ishlatish</span></h1>
+    <p class="lead" data-r style="margin-left:auto;margin-right:auto;">Qurilma o'rnatiladi, bizning serverga ulanadi, model sozlanadi,
+      foydalanuvchi ilovada qo'shadi — va mashina to'liq masofadan boshqariladi. Dastur tayyor, qurilma yo'lda.</p>
+    <div class="stats" data-r style="justify-content:center;">
+      <div class="stat"><div class="num">5</div><div class="lbl">Bosqich</div></div>
+      <div class="stat"><div class="num">2</div><div class="lbl">Ulanish modeli</div></div>
+      <div class="stat"><div class="num">∞</div><div class="lbl">Mashina / brend</div></div>
+    </div>
+  </section>
+
+</div>
+
+<div class="nav">
+  <button id="prev" aria-label="Oldingi">‹</button>
+  <div class="dots" id="dots"></div>
+  <button id="next" aria-label="Keyingi">›</button>
+</div>
+<div class="hint">← → · skroll · swipe</div>
+
+<script>
+(function(){
+  const slides=[...document.querySelectorAll('.slide')];
+  const dotsWrap=document.getElementById('dots');
+  const prog=document.getElementById('prog'), cur=document.getElementById('cur'), tot=document.getElementById('tot');
+  let i=0;
+  tot.textContent=String(slides.length).padStart(2,'0');
+  slides.forEach((_,n)=>{const d=document.createElement('i');d.onclick=()=>go(n);dotsWrap.appendChild(d);});
+  const dots=[...dotsWrap.children];
+  function stagger(s){s.querySelectorAll('[data-r]').forEach((el,n)=>{el.style.transitionDelay=(n*0.07)+'s';});}
+  function go(n){
+    if(n<0||n>=slides.length||(n===i&&slides[i].classList.contains('active')))return;
+    slides[i].classList.remove('active');
+    i=n;const s=slides[i];stagger(s);s.classList.add('active');
+    dots.forEach((d,k)=>d.classList.toggle('on',k===i));
+    cur.textContent=String(i+1).padStart(2,'0');
+    prog.style.width=((i+1)/slides.length*100)+'%';
+    s.scrollTop=0;
+  }
+  function next(){go(Math.min(i+1,slides.length-1));}
+  function prev(){go(Math.max(i-1,0));}
+  document.getElementById('next').onclick=next;
+  document.getElementById('prev').onclick=prev;
+  addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' ')next();
+    else if(e.key==='ArrowLeft'||e.key==='PageUp')prev();
+    else if(e.key==='Home')go(0); else if(e.key==='End')go(slides.length-1);
+  });
+  let wt=0;
+  addEventListener('wheel',e=>{const now=Date.now();if(now-wt<700)return;if(Math.abs(e.deltaY)<18)return;wt=now;e.deltaY>0?next():prev();},{passive:true});
+  let sx=0,sy=0;
+  addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
+  addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;
+    if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>50)dx<0?next():prev();});
+  stagger(slides[0]);dots[0].classList.add('on');prog.style.width=(1/slides.length*100)+'%';
+})();
+</script>
+</body>
+</html>
