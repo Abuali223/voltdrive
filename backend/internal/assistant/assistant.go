@@ -30,7 +30,7 @@ func NewClient(project, location, model string, token func(context.Context) (str
 		location = "us-central1"
 	}
 	if model == "" {
-		model = "gemini-2.5-flash"
+		model = "gemini-2.5-flash-lite" // fast + lighter; retried on 429
 	}
 	return &Client{project: project, location: location, model: model, token: token,
 		http: &http.Client{Timeout: 30 * time.Second}}
@@ -97,17 +97,30 @@ func (c *Client) Ask(ctx context.Context, userMsg, carJSON string, history []Tur
 	j, _ := json.Marshal(body)
 	url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent",
 		c.location, c.project, c.location, c.model)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(j))
-	req.Header.Set("Content-Type", "application/json")
 	tok, err := c.token(ctx)
 	if err != nil {
 		return Reply{}, err
 	}
-	req.Header.Set("Authorization", "Bearer "+tok)
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return Reply{}, err
+	// Vertex AI uses dynamic shared quota, so 429/503 come in bursts — retry
+	// a few times with a short backoff before giving up.
+	var resp *http.Response
+	for attempt := 0; ; attempt++ {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(j))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tok)
+		resp, err = c.http.Do(req)
+		if err != nil {
+			return Reply{}, err
+		}
+		if (resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode != http.StatusServiceUnavailable) || attempt >= 3 {
+			break
+		}
+		resp.Body.Close()
+		select {
+		case <-ctx.Done():
+			return Reply{}, ctx.Err()
+		case <-time.After(time.Duration(300*(attempt+1)) * time.Millisecond):
+		}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
