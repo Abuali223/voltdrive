@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// VoltDrive Cloud Storage security rules.
+//
+// The app does not use Firebase Storage from the client (branding logos are
+// plain external URLs). Deny all client access so the bucket cannot be read
+// from or written to with the public Web API key. If client uploads are ever
+// added, replace the deny-all below with per-path, auth-scoped rules.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1224,7 +1224,7 @@ function renderResults(list) {
   if (!box) return;
   if (!list || !list.length) { box.style.display = "none"; return; }
   box.innerHTML = list.map((it, i) =>
-    `<div class="vd-res" data-i="${i}" style="padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.06);color:#fff;font-size:13px;cursor:pointer;">${(it.display_name || "").split(",").slice(0, 3).join(",")}</div>`
+    `<div class="vd-res" data-i="${i}" style="padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.06);color:#fff;font-size:13px;cursor:pointer;">${escapeHtml((it.display_name || "").split(",").slice(0, 3).join(","))}</div>`
   ).join("");
   box.style.display = "block";
   box.querySelectorAll(".vd-res").forEach((el) =>
@@ -1318,7 +1318,7 @@ async function loadPOI(kind) {
       const m = L.marker([it.lat, it.lng], {
         icon: L.divIcon({ className: "", html: `<div class="vd-poi">${ic}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
       }).addTo(leafletMap);
-      m.bindPopup(`${it.name} · ${it.d.toFixed(1)} km`);
+      m.bindPopup(`${escapeHtml(it.name)} · ${it.d.toFixed(1)} km`);
       poiMarkers.push(m);
     });
     if (items.length) {
@@ -1590,8 +1590,8 @@ function renderMembers(list) {
     row.dataset.member = m.email;
     row.style.cssText = "display:flex;align-items:center;gap:12px;";
     row.innerHTML =
-      '<div class="av">' + initials + "</div>" +
-      '<div style="flex:1;min-width:0"><div style="color:#fff;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + m.email + "</div>" +
+      '<div class="av">' + escapeHtml(initials) + "</div>" +
+      '<div style="flex:1;min-width:0"><div style="color:#fff;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(m.email) + "</div>" +
       '<div style="color:#7e8086;font-size:11px;">' + (uz ? meta.sub.uz : meta.sub.en) + "</div></div>" +
       '<div class="badge ' + meta.cls + '">' + (uz ? meta.uz : meta.en) + "</div>" +
       '<div class="vd-rm" style="color:#ff6b6b;cursor:pointer;padding:4px;font-size:18px;line-height:1;">×</div>';
@@ -2040,7 +2040,7 @@ async function loadFleet() {
     return `<div class="fleet-card">
       <div class="fleet-dot" style="background:${dotC}"></div>
       <div style="flex:1;min-width:0">
-        <div style="color:#fff;font-weight:700;font-size:14px;font-family:'Sora'">${v.name}</div>
+        <div style="color:#fff;font-weight:700;font-size:14px;font-family:'Sora'">${escapeHtml(v.name)}</div>
         <div style="color:#8a8c92;font-size:12px;margin-top:2px;">${batt != null ? batt + "% · " : ""}${range != null ? range + " km · " : ""}${lockTxt}</div>
       </div>
       <i data-lucide="${locked ? "lock" : "lock-open"}" style="width:17px;height:17px;color:${locked ? "#43d684" : "var(--acc)"}"></i>
@@ -2197,9 +2197,9 @@ async function openGuestKeys() {
       el.innerHTML = keys.map((k) => {
         const left = Math.max(0, Math.round((k.expiresAt - Date.now() / 1000) / 3600));
         return '<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:12px;padding:10px 12px;margin-bottom:8px;">' +
-          '<div style="flex:1;"><div style="color:#fff;font-weight:800;font-family:\'Sora\';letter-spacing:1px;">' + k.code + "</div>" +
-          '<div style="color:#7e8086;font-size:11px;margin-top:2px;">' + (k.scope || []).join(" · ") + " · " + left + (uz ? " soat qoldi" : "h left") + "</div></div>" +
-          '<div data-revoke="' + k.code + '" style="color:#ff6a6a;font-size:12px;font-weight:700;cursor:pointer;">' + (uz ? "Bekor" : "Revoke") + "</div></div>";
+          '<div style="flex:1;"><div style="color:#fff;font-weight:800;font-family:\'Sora\';letter-spacing:1px;">' + escapeHtml(k.code) + "</div>" +
+          '<div style="color:#7e8086;font-size:11px;margin-top:2px;">' + escapeHtml((k.scope || []).join(" · ")) + " · " + left + (uz ? " soat qoldi" : "h left") + "</div></div>" +
+          '<div data-revoke="' + escapeHtml(k.code) + '" style="color:#ff6a6a;font-size:12px;font-weight:700;cursor:pointer;">' + (uz ? "Bekor" : "Revoke") + "</div></div>";
       }).join("");
       el.querySelectorAll("[data-revoke]").forEach((b) => b.onclick = async () => {
         await fetch(`${CFG.apiBase}/v1/vehicles/${vid}/guestkeys/${b.getAttribute("data-revoke")}`, { method: "DELETE", headers: { Authorization: `Bearer ${await token()}` } });
