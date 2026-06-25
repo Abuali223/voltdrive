@@ -24,6 +24,7 @@ import (
 	"voltdrive/backend/internal/provider"
 	"voltdrive/backend/internal/realtime"
 	"voltdrive/backend/internal/schedule"
+	"voltdrive/backend/internal/subscription"
 )
 
 // Server holds dependencies for the HTTP handlers.
@@ -31,18 +32,19 @@ type Server struct {
 	Registry         *provider.Registry
 	Verifier         auth.Verifier
 	Perms            auth.Permissions
-	Hub              *realtime.Hub   // optional: real-time telemetry stream
-	Members          *members.Store  // optional: family/shared-access management
-	Devices          *devices.Store  // optional: FCM device-token registry
-	Schedules        *schedule.Store // optional: departure-timer storage
-	GuestKeys        *guestkey.Store // optional: time-limited guest access
-	Geofences        *geofence.Store // optional: safe-zone storage
-	FCM              *notify.FCM     // optional: push sender (for the test endpoint)
-	AllowedOrigins   []string        // CORS allowlist (empty = permissive "*")
-	OwnerEmail       string          // bootstrap fleet owner (full access without a Firestore grant)
-	TrustedProxyHops int             // proxies between us and the client (for real-IP extraction)
-	RatePerSec       float64         // per-IP request rate (default 20)
-	RateBurst        float64         // per-IP burst (default 40)
+	Hub              *realtime.Hub       // optional: real-time telemetry stream
+	Members          *members.Store      // optional: family/shared-access management
+	Devices          *devices.Store      // optional: FCM device-token registry
+	Schedules        *schedule.Store     // optional: departure-timer storage
+	GuestKeys        *guestkey.Store     // optional: time-limited guest access
+	Geofences        *geofence.Store     // optional: safe-zone storage
+	Subscriptions    *subscription.Store // optional: freemium plan/billing state
+	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
+	AllowedOrigins   []string            // CORS allowlist (empty = permissive "*")
+	OwnerEmail       string              // bootstrap fleet owner (full access without a Firestore grant)
+	TrustedProxyHops int                 // proxies between us and the client (for real-IP extraction)
+	RatePerSec       float64             // per-IP request rate (default 20)
+	RateBurst        float64             // per-IP burst (default 40)
 }
 
 // Routes builds the http.Handler with all endpoints registered and the
@@ -115,6 +117,17 @@ func (s *Server) Routes() http.Handler {
 	if s.Geofences != nil {
 		mux.HandleFunc("GET /v1/vehicles/{id}/geofence", s.guard(auth.ActView, s.handleGeofenceGet))
 		mux.HandleFunc("PUT /v1/vehicles/{id}/geofence", s.guard(auth.ActManage, s.handleGeofencePut))
+	}
+
+	// Subscriptions (freemium): user reads own plan, starts a trial or requests
+	// a paid tier; admins list everyone and activate/revoke after payment.
+	if s.Subscriptions != nil {
+		mux.HandleFunc("GET /v1/subscription", s.guardUser(s.handleSubGet))
+		mux.HandleFunc("POST /v1/subscription/trial", s.guardUser(s.handleSubTrial))
+		mux.HandleFunc("POST /v1/subscription/request", s.guardUser(s.handleSubRequest))
+		mux.HandleFunc("GET /v1/admin/subscriptions", s.guardUser(s.handleAdminSubs))
+		mux.HandleFunc("POST /v1/admin/subscriptions/{uid}/activate", s.guardUser(s.handleAdminActivate))
+		mux.HandleFunc("POST /v1/admin/subscriptions/{uid}/revoke", s.guardUser(s.handleAdminRevoke))
 	}
 
 	// Real-time telemetry stream (WebSocket).
@@ -598,6 +611,144 @@ func (s *Server) handleGuestKeyRevoke(w http.ResponseWriter, r *http.Request, us
 	}
 	audit(r, user, r.PathValue("id"), "guestkey:revoke", nil)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// isAdmin reports whether the caller is the configured fleet owner/admin.
+func (s *Server) isAdmin(u auth.User) bool {
+	return s.OwnerEmail != "" && u.Email != "" && strings.EqualFold(u.Email, s.OwnerEmail)
+}
+
+func (s *Server) handleSubGet(w http.ResponseWriter, r *http.Request, user auth.User) {
+	sub, err := s.Subscriptions.Get(r.Context(), user.UID)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load subscription")
+		return
+	}
+	writeJSON(w, http.StatusOK, sub.Normalize())
+}
+
+func (s *Server) handleSubTrial(w http.ResponseWriter, r *http.Request, user auth.User) {
+	sub, err := s.Subscriptions.Get(r.Context(), user.UID)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load subscription")
+		return
+	}
+	// One trial per account: block if a trial was already used or already premium.
+	if sub.Status == "trial" || sub.Status == "active" || (sub.Status == "expired" && sub.Tier == "trial") {
+		writeErr(w, http.StatusConflict, "trial already used")
+		return
+	}
+	now := time.Now()
+	sub.UID, sub.Email = user.UID, user.Email
+	sub.Plan, sub.Status, sub.Tier = "premium", "trial", "trial"
+	sub.StartedAt = now.Unix()
+	sub.ExpiresAt = now.Add(14 * 24 * time.Hour).Unix()
+	if err := s.Subscriptions.Put(r.Context(), sub); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not start trial")
+		return
+	}
+	writeJSON(w, http.StatusOK, sub)
+}
+
+func (s *Server) handleSubRequest(w http.ResponseWriter, r *http.Request, user auth.User) {
+	var req struct {
+		Tier string `json:"tier"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.Tier != "1m" && req.Tier != "2m" && req.Tier != "1y" {
+		writeErr(w, http.StatusBadRequest, "invalid tier")
+		return
+	}
+	sub, err := s.Subscriptions.Get(r.Context(), user.UID)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load subscription")
+		return
+	}
+	sub.UID, sub.Email = user.UID, user.Email
+	sub.RequestedTier = req.Tier
+	sub.RequestedAt = time.Now().Unix()
+	if !sub.Active() { // keep trial access if still valid; otherwise mark pending
+		sub.Status = "pending"
+	}
+	if err := s.Subscriptions.Put(r.Context(), sub); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not save request")
+		return
+	}
+	writeJSON(w, http.StatusOK, sub)
+}
+
+func (s *Server) handleAdminSubs(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isAdmin(user) {
+		writeErr(w, http.StatusForbidden, "admin only")
+		return
+	}
+	subs, err := s.Subscriptions.All(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not list subscriptions")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"subscriptions": subs})
+}
+
+func (s *Server) handleAdminActivate(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isAdmin(user) {
+		writeErr(w, http.StatusForbidden, "admin only")
+		return
+	}
+	uid := r.PathValue("uid")
+	var req struct {
+		Tier string `json:"tier"`
+	}
+	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&req)
+	sub, err := s.Subscriptions.Get(r.Context(), uid)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load subscription")
+		return
+	}
+	tier := req.Tier
+	if tier == "" {
+		tier = sub.RequestedTier
+	}
+	if tier == "" {
+		tier = "1m"
+	}
+	now := time.Now()
+	sub.UID = uid
+	sub.Plan, sub.Status, sub.Tier = "premium", "active", tier
+	sub.StartedAt = now.Unix()
+	sub.ExpiresAt = now.Add(subscription.TierDuration(tier)).Unix()
+	sub.RequestedTier = ""
+	if err := s.Subscriptions.Put(r.Context(), sub); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not activate")
+		return
+	}
+	audit(r, user, uid, "sub:activate:"+tier, nil)
+	writeJSON(w, http.StatusOK, sub)
+}
+
+func (s *Server) handleAdminRevoke(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isAdmin(user) {
+		writeErr(w, http.StatusForbidden, "admin only")
+		return
+	}
+	uid := r.PathValue("uid")
+	sub, err := s.Subscriptions.Get(r.Context(), uid)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load subscription")
+		return
+	}
+	sub.UID = uid
+	sub.Plan, sub.Status = "free", "expired"
+	sub.ExpiresAt = time.Now().Unix()
+	if err := s.Subscriptions.Put(r.Context(), sub); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not revoke")
+		return
+	}
+	audit(r, user, uid, "sub:revoke", nil)
+	writeJSON(w, http.StatusOK, sub)
 }
 
 // maskCode redacts all but the first two characters of a guest code so the

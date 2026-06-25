@@ -19,4 +19,19 @@ window.VOLTDRIVE_CONFIG = {
   apiBase: "https://voltdrive-api-iv6iceq35q-ew.a.run.app",
   // Web Push (FCM) public VAPID key from Firebase Console → Cloud Messaging.
   vapidKey: "BAn1RT5ijNZwns1IW8WGhWU3ypMYrv7Q3O3CmkeqT3ZTCwrj0YGDJOrMY-6J-nzphj_3Zv5E7duBuJZGKgekYkE",
+
+  // --- White-label branding (a dealer/OEM can rebrand by editing this) ---
+  branding: {
+    name: "VoltDrive",
+    tagline: "Smart EV Control",
+    accent: "#FF6A1A", // primary accent; "" keeps the default orange
+  },
+
+  // --- Subscription / billing (temporary manual flow until a gateway) ---
+  payment: {
+    // Card the user transfers to; the admin then activates the plan.
+    card: "8600 1234 5678 9012",
+    holder: "VoltDrive LLC",
+    prices: { "1m": "39 000", "2m": "69 000", "1y": "349 000" }, // UZS
+  },
 };

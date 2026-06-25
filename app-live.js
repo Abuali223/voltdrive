@@ -76,6 +76,7 @@ setupPullToRefresh();
 setupInstallPrompt();
 wireExtras();
 setupA11y();
+applyBranding();
 
 // setupA11y makes the div-based controls keyboard- and screen-reader-friendly:
 // it tags clickable elements with role="button" + tabindex and lets Enter/Space
@@ -125,6 +126,7 @@ function boot() {
           authStatus(uzNow() ? "Kirildi — PIN..." : "Signed in — PIN...");
           showUser(user);
           try { subscribe(); } catch (e) { console.warn("subscribe:", e); }
+          refreshSubscription(); // load the user's plan for the profile + gating
           // Security gate: ask for a PIN before entering (set up first time).
           await lockGate(user.uid);
           // Winter convenience: offer a one-tap warm-up before entering.
@@ -568,6 +570,14 @@ function wireControls() {
   App.openGuestEntry = openGuestEntry;
   App.openGeofence = openGeofence;
   App.panic = panic;
+  // Premium / subscription + Fleet dashboard.
+  App.openPremium = openPremium;
+  App.openFleet = openFleet;
+  App.startTrial = startTrial;
+  App.requestTier = requestTier;
+  App.copyCard = copyCard;
+  App.loadFleet = loadFleet;
+  App.fleetAll = fleetAll;
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
   const origLights = App.toggleLights.bind(App);
@@ -1739,6 +1749,7 @@ function pickFamilyCar() {
 async function openSchedule() {
   const uz = window.App?.lang === "uz";
   if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  if (!requirePremium()) return; // Departure timer is a Premium feature
   const vid = VMAP[App.activeCar?.id] || "voyah-001";
   let cur = { enabled: false, hour: 7, minute: 0, targetC: 24 };
   try {
@@ -1823,6 +1834,199 @@ function vdModal(innerHTML, maxw) {
 function curVid() { return VMAP[window.App?.activeCar?.id] || "voyah-001"; }
 
 // --- Panic alarm: flash lights + sound the horn ---
+// --- Subscriptions (Premium) ---
+
+let currentSub = null;
+const PLAN_LABEL = { trial: { uz: "Premium (sinov)", ru: "Премиум (триал)", en: "Premium (trial)" },
+  active: { uz: "Premium", ru: "Премиум", en: "Premium" } };
+
+async function apiAuthFetch(path, opts = {}) {
+  const token = await auth.currentUser.getIdToken();
+  return fetch(`${CFG.apiBase}${path}`, { ...opts, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(opts.headers || {}) } });
+}
+
+// Fetch the user's plan after sign-in and reflect it on the profile card.
+async function refreshSubscription() {
+  if (!CFG.apiBase || !auth?.currentUser) return;
+  try {
+    const r = await apiAuthFetch("/v1/subscription");
+    if (r.ok) { currentSub = await r.json(); renderPlanBadge(); }
+  } catch (e) {}
+}
+
+function planActive() { return currentSub && (currentSub.status === "trial" || currentSub.status === "active"); }
+
+function renderPlanBadge() {
+  const lang = window.App?.lang || "en";
+  const t = document.getElementById("plan-title");
+  const s = document.getElementById("plan-sub");
+  if (!t || !s) return;
+  s.removeAttribute("data-i18n");
+  if (planActive()) {
+    const lab = (PLAN_LABEL[currentSub.status] || PLAN_LABEL.active);
+    t.textContent = "VoltDrive " + (lab[lang] || lab.en);
+    const days = Math.max(0, Math.ceil((currentSub.expiresAt - Date.now() / 1000) / 86400));
+    s.textContent = (lang === "ru" ? `Активно · осталось ${days} дн.` : lang === "uz" ? `Faol · ${days} kun qoldi` : `Active · ${days} days left`);
+  } else {
+    t.textContent = "VoltDrive Free";
+    s.textContent = (lang === "ru" ? "Нажмите, чтобы открыть Премиум-тарифы" : lang === "uz" ? "Premium tariflarni ko'rish uchun bosing" : "Tap to see Premium plans");
+  }
+}
+
+async function openPremium() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  // Prices from config.
+  const pr = (CFG.payment && CFG.payment.prices) || {};
+  ["1m", "2m", "1y"].forEach((k) => { const el = document.getElementById("price-" + k); if (el && pr[k]) el.textContent = pr[k]; });
+  document.getElementById("prem-pay").style.display = "none";
+  window.App.go("premium");
+  await refreshSubscription();
+  renderPremiumStatus();
+}
+
+function renderPremiumStatus() {
+  const lang = window.App?.lang || "en";
+  const box = document.getElementById("prem-status");
+  const trialWrap = document.getElementById("prem-trial-wrap");
+  if (!box) return;
+  if (planActive()) {
+    const lab = (PLAN_LABEL[currentSub.status] || PLAN_LABEL.active);
+    const days = Math.max(0, Math.ceil((currentSub.expiresAt - Date.now() / 1000) / 86400));
+    document.getElementById("prem-status-t").textContent = "VoltDrive " + (lab[lang] || lab.en);
+    document.getElementById("prem-status-s").textContent = (lang === "ru" ? `Осталось ${days} дн.` : lang === "uz" ? `${days} kun qoldi` : `${days} days left`);
+    box.style.display = "block";
+    if (trialWrap) trialWrap.style.display = "none";
+  } else {
+    box.style.display = "none";
+    // Hide the trial button if a trial was already used.
+    if (trialWrap) trialWrap.style.display = (currentSub && currentSub.status === "expired" && currentSub.tier === "trial") ? "none" : "block";
+  }
+}
+
+async function startTrial() {
+  const uz = window.App?.lang === "uz";
+  try {
+    const r = await apiAuthFetch("/v1/subscription/trial", { method: "POST" });
+    if (r.status === 409) { toast(uz ? "Sinov allaqachon ishlatilgan" : "Trial already used"); return; }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    currentSub = await r.json();
+    renderPlanBadge(); renderPremiumStatus();
+    toast(uz ? "14 kunlik Premium yoqildi ✓" : "14-day Premium activated ✓", "ok");
+    haptic([10, 40, 12]);
+  } catch (e) { toast((uz ? "Xato: " : "Failed: ") + e.message, "err"); }
+}
+
+async function requestTier(tier) {
+  const uz = window.App?.lang === "uz";
+  try {
+    const r = await apiAuthFetch("/v1/subscription/request", { method: "POST", body: JSON.stringify({ tier }) });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    currentSub = await r.json();
+    // Show payment instructions.
+    const pay = CFG.payment || {};
+    document.getElementById("pay-card").textContent = pay.card || "—";
+    document.getElementById("pay-holder").textContent = pay.holder || "";
+    const price = (pay.prices && pay.prices[tier]) || "";
+    const names = { "1m": uz ? "1 oy" : "1 month", "2m": uz ? "2 oy" : "2 months", "1y": uz ? "1 yil" : "1 year" };
+    document.getElementById("pay-amount").textContent = (uz ? "To'lov: " : "Amount: ") + price + " so'm · " + names[tier];
+    const box = document.getElementById("prem-pay");
+    box.style.display = "block";
+    box.scrollIntoView({ behavior: "smooth", block: "center" });
+    toast(uz ? "So'rov yuborildi — kartaga to'lang" : "Requested — transfer to the card", "ok");
+  } catch (e) { toast((uz ? "Xato: " : "Failed: ") + e.message, "err"); }
+}
+
+function copyCard() {
+  const uz = window.App?.lang === "uz";
+  const card = (CFG.payment && CFG.payment.card) || "";
+  navigator.clipboard?.writeText(card.replace(/\s/g, "")).then(
+    () => toast(uz ? "Karta raqami nusxalandi ✓" : "Card number copied ✓", "ok"),
+    () => toast(card));
+}
+
+// requirePremium gates a premium-only feature; returns true if allowed,
+// otherwise opens the Premium screen.
+function requirePremium() {
+  if (planActive()) return true;
+  const uz = window.App?.lang === "uz";
+  toast(uz ? "Bu funksiya Premium uchun" : "This is a Premium feature");
+  openPremium();
+  return false;
+}
+
+// --- Fleet dashboard ---
+
+async function openFleet() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  window.App.go("fleet");
+  loadFleet();
+}
+
+async function loadFleet() {
+  const uz = window.App?.lang === "uz";
+  const list = document.getElementById("fleet-list");
+  if (!list) return;
+  const fleet = [
+    { id: "voyah-001", name: "Voyah Free" }, { id: "deepal-002", name: "Deepal S07" },
+    { id: "dongfeng-003", name: "Dongfeng" }, { id: "byd-004", name: "BYD" },
+  ];
+  list.innerHTML = `<div style="color:#6a6c72;text-align:center;padding:30px;font-size:13px;">${uz ? "Yuklanmoqda…" : "Loading…"}</div>`;
+  const results = await Promise.all(fleet.map(async (v) => {
+    try {
+      const r = await apiAuthFetch(`/v1/vehicles/${v.id}`);
+      if (r.ok) return { ...v, snap: await r.json() };
+    } catch (e) {}
+    return { ...v, snap: null };
+  }));
+  let online = 0;
+  list.innerHTML = results.map((v) => {
+    const s = v.snap || {};
+    const ok = !!v.snap; if (ok) online++;
+    const batt = typeof s.batteryPct === "number" ? s.batteryPct : (typeof s.soc === "number" ? s.soc : null);
+    const locked = s.locked !== undefined ? s.locked : (s.doorsLocked !== undefined ? s.doorsLocked : null);
+    const range = typeof s.rangeKm === "number" ? s.rangeKm : null;
+    const dotC = !ok ? "#5a5c62" : batt != null && batt < 20 ? "#ff5252" : "#43d684";
+    const lockTxt = locked === null ? "—" : locked ? (uz ? "Qulflangan" : "Locked") : (uz ? "Ochiq" : "Unlocked");
+    return `<div class="fleet-card">
+      <div class="fleet-dot" style="background:${dotC}"></div>
+      <div style="flex:1">
+        <div style="color:#fff;font-weight:700;font-size:14px;font-family:'Sora'">${v.name}</div>
+        <div style="color:#8a8c92;font-size:12px;margin-top:2px;">${batt != null ? batt + "% · " : ""}${range != null ? range + " km · " : ""}${lockTxt}</div>
+      </div>
+      <i data-lucide="${locked ? "lock" : "lock-open"}" style="width:17px;height:17px;color:${locked ? "#43d684" : "#FF8A3D"}"></i>
+    </div>`;
+  }).join("");
+  const sub = document.getElementById("fleet-sub");
+  if (sub) { sub.removeAttribute("data-i18n"); sub.textContent = `${results.length} ${uz ? "mashina" : "vehicles"} · ${online} ${uz ? "onlayn" : "online"}`; }
+  if (window.lucide) lucide.createIcons();
+}
+
+async function fleetAll(action) {
+  const uz = window.App?.lang === "uz";
+  const ids = ["voyah-001", "deepal-002", "dongfeng-003", "byd-004"];
+  toast(uz ? "Bajarilmoqda…" : "Working…");
+  await Promise.all(ids.map((id) => apiAuthFetch(`/v1/vehicles/${id}/${action}`, { method: "POST" }).catch(() => {})));
+  toast(action === "lock" ? (uz ? "Hammasi qulflandi ✓" : "All locked ✓") : (uz ? "Hammasi ochildi ✓" : "All unlocked ✓"), "ok");
+  haptic([10, 30, 10]);
+  loadFleet();
+}
+
+// --- White-label branding (apply config.branding) ---
+function applyBranding() {
+  const b = (CFG && CFG.branding) || {};
+  if (b.accent) {
+    document.documentElement.style.setProperty("--o", b.accent);
+  }
+  if (b.name && b.name !== "VoltDrive") {
+    document.querySelectorAll(".brand-name").forEach((el) => (el.textContent = b.name));
+    const pn = document.getElementById("profile-name");
+    if (pn && pn.textContent === "VoltDrive") pn.textContent = b.name;
+    document.title = b.name + (b.tagline ? " — " + b.tagline : "");
+  }
+}
+
 async function panic() {
   const uz = window.App?.lang === "uz";
   if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
@@ -1970,6 +2174,7 @@ function guestPanel(code, info, uz) {
 async function openGeofence() {
   const uz = window.App?.lang === "uz";
   if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  if (!requirePremium()) return; // Safe zone is a Premium feature
   const vid = curVid();
   let cur = { enabled: false, lat: 0, lng: 0, radiusM: 300 };
   try {

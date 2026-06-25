@@ -202,6 +202,18 @@ body{
 .av.org{background:linear-gradient(150deg,#FF8A2B,#FF4D00);color:#fff;}
 .srch{height:44px;border-radius:15px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:10px;padding:0 14px;color:#7e8086;font-size:13px;margin-bottom:16px;}
 .gold{font-family:'Sora';font-weight:700;font-size:15px;background:linear-gradient(90deg,#F4DFA0,#C9A24B);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.prem-tier{position:relative;display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-radius:18px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);cursor:pointer;transition:transform .2s,border-color .2s,background .2s;}
+.prem-tier:active{transform:scale(.98);}
+.prem-tier.hot{border-color:rgba(255,138,43,.55);background:linear-gradient(135deg,rgba(255,138,43,.1),rgba(255,255,255,.03));}
+.pt-name{font-family:'Sora';font-weight:700;font-size:17px;color:#fff;}
+.pt-sub{color:#8a8c92;font-size:12px;margin-top:2px;}
+.pt-price{font-family:'Sora';font-weight:800;font-size:19px;color:#fff;}
+.pt-cur{font-size:12px;color:#8a8c92;font-weight:600;}
+.pt-cta{color:#FF8A3D;font-size:12px;font-weight:700;margin-top:3px;}
+.fleet-card{display:flex;align-items:center;gap:13px;padding:14px;border-radius:16px;background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.09);margin-bottom:10px;}
+.fleet-dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
 #power-btn{width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .1s,box-shadow .3s,background .3s;}
 #power-btn.on{background:radial-gradient(circle at 50% 35%,#FF8A2B,#FF4D00);box-shadow:0 0 0 8px rgba(255,90,0,.12),0 16px 36px -8px rgba(255,90,0,.7);color:#fff;}
 #power-btn.off{background:radial-gradient(circle at 50% 35%,#222326,#17181b);box-shadow:0 0 0 8px rgba(255,255,255,.04),0 16px 36px -8px rgba(0,0,0,.6);color:#4a4c52;}
@@ -719,10 +731,10 @@ body{
       <div style="flex:1"><div style="font-family:'Sora';font-weight:700;font-size:18px;color:#fff;" id="profile-name">VoltDrive</div><div style="color:#7e8086;font-size:12px;margin-top:2px;" id="profile-email">—</div></div>
     </div>
     <div style="padding:0 22px;">
-      <div class="gold-card">
+      <div class="gold-card" onclick="App.openPremium()" style="cursor:pointer;">
         <div style="position:absolute;top:-20px;right:-10px;font-size:80px;color:rgba(214,178,92,.12)"><i data-lucide="crown" style="width:80px;height:80px"></i></div>
-        <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="crown" style="width:18px;height:18px;color:#E8C871"></i><span class="gold">Gold Premium</span></div>
-        <div style="color:#cdbb8e;font-size:12px;margin-top:6px;line-height:1.5;" data-i18n="profile.premium">Full remote control · priority support · valid until Dec 2026</div>
+        <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="crown" style="width:18px;height:18px;color:#E8C871"></i><span class="gold" id="plan-title">VoltDrive Free</span></div>
+        <div style="color:#cdbb8e;font-size:12px;margin-top:6px;line-height:1.5;" id="plan-sub" data-i18n="profile.premium">Premium tariflarni ko'rish uchun bosing</div>
       </div>
     </div>
     <div style="padding:16px 22px 0;">
@@ -756,6 +768,11 @@ body{
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.family">Family sharing</div>
         <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
       </div>
+      <div class="prow" onclick="App.openFleet()">
+        <div class="chip sm neu"><i data-lucide="layout-dashboard" style="width:16px;height:16px"></i></div>
+        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.fleet">Fleet dashboard</div>
+        <span style="font-size:10px;font-weight:800;color:#0a0b0d;background:linear-gradient(150deg,#FF8A2B,#FF4D00);padding:3px 8px;border-radius:6px;letter-spacing:.5px;">PRO</span>
+      </div>
       <div class="prow" onclick="App.enableNotifications()">
         <div class="chip sm neu"><i data-lucide="bell" style="width:16px;height:16px"></i></div>
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.notif">Notifications</div>
@@ -778,6 +795,72 @@ body{
     <div class="ni" onclick="App.go('charge')"><i data-lucide="zap" style="width:22px;height:22px"></i></div>
     <div class="ni" onclick="App.go('map')"><i data-lucide="map-pin" style="width:22px;height:22px"></i></div>
     <div class="ni on"><i data-lucide="user" style="width:22px;height:22px"></i></div>
+  </div>
+</div>
+
+<!-- ===== SCREEN: PREMIUM / PLANS ===== -->
+<div class="screen" id="s-premium">
+  <div class="sb"><span class="sb-t time">19:02</span><span class="sb-i"><i data-lucide="signal" style="width:14px;height:14px"></i><i data-lucide="wifi" style="width:14px;height:14px"></i><i data-lucide="battery-medium" style="width:14px;height:14px"></i></span></div>
+  <div style="display:flex;align-items:center;gap:14px;padding:14px 20px 6px;flex-shrink:0;">
+    <div class="ibtn" onclick="App.back()"><i data-lucide="chevron-left" style="width:20px;height:20px"></i></div>
+    <div style="font-family:'Sora';font-weight:700;font-size:18px;color:#fff;" data-i18n="prem.title">Premium</div>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:8px 20px 90px;">
+    <div id="prem-status" style="display:none;background:linear-gradient(135deg,rgba(255,138,43,.16),rgba(255,77,0,.08));border:1px solid rgba(255,138,43,.35);border-radius:16px;padding:14px 16px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="crown" style="width:17px;height:17px;color:#FFB070"></i><span id="prem-status-t" style="font-family:'Sora';font-weight:700;color:#fff;font-size:15px;">—</span></div>
+      <div id="prem-status-s" style="color:#cdbb8e;font-size:12px;margin-top:4px;"></div>
+    </div>
+
+    <div style="font-family:'Sora';font-weight:800;font-size:22px;color:#fff;letter-spacing:-.5px;" data-i18n="prem.head">Cheksiz boshqaruv. Bir tarif.</div>
+    <div style="color:#9a9ca4;font-size:13px;margin:6px 0 18px;line-height:1.5;" data-i18n="prem.lead">Premium bilan avto-qizdirish, xavfsiz hudud, oilaviy kirish va ustuvor yordam.</div>
+
+    <div id="prem-trial-wrap" style="margin-bottom:16px;">
+      <div class="obtn" onclick="App.startTrial()" style="height:50px;border-radius:15px;font-size:15px;"><i data-lucide="gift" style="width:18px;height:18px"></i><span data-i18n="prem.trial">14 kun bepul sinab ko'rish</span></div>
+      <div style="text-align:center;color:#6a6c72;font-size:11px;margin-top:7px;" data-i18n="prem.trial.sub">Karta talab qilinmaydi · istalgan vaqt bekor qilinadi</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px;" id="prem-tiers">
+      <div class="prem-tier" onclick="App.requestTier('1m')">
+        <div><div class="pt-name" data-i18n="prem.1m">1 oy</div><div class="pt-sub" data-i18n="prem.1m.sub">Oylik</div></div>
+        <div style="text-align:right;"><div class="pt-price"><span id="price-1m">39 000</span> <span class="pt-cur">so'm</span></div><div class="pt-cta" data-i18n="prem.choose">Tanlash →</div></div>
+      </div>
+      <div class="prem-tier hot" onclick="App.requestTier('2m')">
+        <div style="position:absolute;top:-9px;left:16px;font-size:10px;font-weight:800;color:#0a0b0d;background:linear-gradient(150deg,#FF8A2B,#FF4D00);padding:3px 9px;border-radius:6px;" data-i18n="prem.popular">OMMABOP</div>
+        <div><div class="pt-name" data-i18n="prem.2m">2 oy</div><div class="pt-sub" data-i18n="prem.2m.sub">2 oylik · tejamkor</div></div>
+        <div style="text-align:right;"><div class="pt-price"><span id="price-2m">69 000</span> <span class="pt-cur">so'm</span></div><div class="pt-cta" data-i18n="prem.choose">Tanlash →</div></div>
+      </div>
+      <div class="prem-tier" onclick="App.requestTier('1y')">
+        <div><div class="pt-name" data-i18n="prem.1y">1 yil</div><div class="pt-sub" data-i18n="prem.1y.sub">Yillik · eng arzon</div></div>
+        <div style="text-align:right;"><div class="pt-price"><span id="price-1y">349 000</span> <span class="pt-cur">so'm</span></div><div class="pt-cta" data-i18n="prem.choose">Tanlash →</div></div>
+      </div>
+    </div>
+
+    <div id="prem-pay" style="display:none;margin-top:18px;background:rgba(255,255,255,.04);border:1px solid var(--line,rgba(255,255,255,.1));border-radius:16px;padding:16px;">
+      <div style="font-family:'Sora';font-weight:700;color:#fff;font-size:15px;margin-bottom:4px;" data-i18n="prem.pay.title">To'lov ko'rsatmasi</div>
+      <div style="color:#9a9ca4;font-size:12.5px;line-height:1.55;" data-i18n="prem.pay.desc">Quyidagi kartaga to'lovni o'tkazing. To'lov tasdiqlangach, obunangiz faollashtiriladi (odatda 1 ish kuni ichida).</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#0d0e11;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:13px 15px;margin-top:12px;">
+        <div><div id="pay-card" style="font-family:'Sora';font-weight:700;color:#fff;font-size:16px;letter-spacing:1px;">—</div><div id="pay-holder" style="color:#7e8086;font-size:11px;margin-top:2px;"></div></div>
+        <div class="ibtn" onclick="App.copyCard()" style="width:36px;height:36px;"><i data-lucide="copy" style="width:16px;height:16px"></i></div>
+      </div>
+      <div id="pay-amount" style="color:#FF8A3D;font-weight:700;font-size:13px;margin-top:10px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCREEN: FLEET DASHBOARD ===== -->
+<div class="screen" id="s-fleet">
+  <div class="sb"><span class="sb-t time">19:02</span><span class="sb-i"><i data-lucide="signal" style="width:14px;height:14px"></i><i data-lucide="wifi" style="width:14px;height:14px"></i><i data-lucide="battery-medium" style="width:14px;height:14px"></i></span></div>
+  <div style="display:flex;align-items:center;gap:14px;padding:14px 20px 6px;flex-shrink:0;">
+    <div class="ibtn" onclick="App.back()"><i data-lucide="chevron-left" style="width:20px;height:20px"></i></div>
+    <div style="flex:1"><div style="font-family:'Sora';font-weight:700;font-size:18px;color:#fff;" data-i18n="fleet.title">Fleet boshqaruvi</div><div id="fleet-sub" style="color:#7e8086;font-size:12px;" data-i18n="fleet.sub">Park holati</div></div>
+    <div class="ibtn" onclick="App.loadFleet()"><i data-lucide="refresh-cw" style="width:17px;height:17px"></i></div>
+  </div>
+  <div style="display:flex;gap:10px;padding:8px 20px;flex-shrink:0;">
+    <div class="obtn" onclick="App.fleetAll('lock')" style="flex:1;height:42px;border-radius:13px;font-size:13px;"><i data-lucide="lock" style="width:15px;height:15px"></i><span data-i18n="fleet.lockall">Hammasini qulflash</span></div>
+    <div class="map-chip" onclick="App.fleetAll('unlock')" style="height:42px;padding:0 16px;"><i data-lucide="lock-open" style="width:15px;height:15px"></i><span data-i18n="fleet.unlockall">Ochish</span></div>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:6px 20px 90px;" id="fleet-list">
+    <div style="color:#6a6c72;text-align:center;padding:30px;font-size:13px;" data-i18n="fleet.loading">Yuklanmoqda…</div>
   </div>
 </div>
 
@@ -979,7 +1062,15 @@ const App = {
     'family.driver':'Водитель','family.limsub':'Местоположение · только замок',
     'family.limited':'Ограниченный','family.invite':'Пригласить через Gmail',
     'lbl.home':'Главная',
-    'alerts.title':'Уведомления','alerts.empty':'Пока нет уведомлений'
+    'alerts.title':'Уведомления','alerts.empty':'Пока нет уведомлений',
+    'profile.fleet':'Панель автопарка',
+    'prem.title':'Премиум','prem.head':'Безграничный контроль. Один тариф.',
+    'prem.lead':'С Премиум — автопрогрев, безопасная зона, семейный доступ и приоритетная поддержка.',
+    'prem.trial':'Попробовать 14 дней бесплатно','prem.trial.sub':'Без карты · отмена в любой момент',
+    'prem.1m':'1 месяц','prem.1m.sub':'Помесячно','prem.2m':'2 месяца','prem.2m.sub':'2 месяца · выгодно',
+    'prem.1y':'1 год','prem.1y.sub':'Год · самый выгодный','prem.choose':'Выбрать →','prem.popular':'ПОПУЛЯРНО',
+    'prem.pay.title':'Инструкция по оплате','prem.pay.desc':'Переведите оплату на карту ниже. После подтверждения подписка активируется (обычно в течение 1 рабочего дня).',
+    'fleet.title':'Управление автопарком','fleet.sub':'Состояние парка','fleet.lockall':'Закрыть все','fleet.unlockall':'Открыть','fleet.loading':'Загрузка…'
   },
 
   origEN: {},
@@ -1136,6 +1227,13 @@ const App = {
   openGuestKeys() {},
   openGuestEntry() {},
   openGeofence() {},
+  openPremium() {},
+  openFleet() {},
+  startTrial() {},
+  requestTier() {},
+  copyCard() {},
+  loadFleet() {},
+  fleetAll() {},
   panic() {},
 
   // Add a vehicle to the garage. Lists supported, backend-seeded cars that
