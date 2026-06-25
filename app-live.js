@@ -1020,6 +1020,11 @@ function wireExtras() {
   if (pc) pc.addEventListener("click", () => { pc.classList.add("on"); pf && pf.classList.remove("on"); loadPOI("charging_station"); });
   if (pf) pf.addEventListener("click", () => { pf.classList.add("on"); pc && pc.classList.remove("on"); loadPOI("fuel"); });
   if (px) px.addEventListener("click", () => { clearRoute(); toast(window.App?.lang === "uz" ? "Tozalandi" : "Cleared"); });
+  const cancelBtn = document.getElementById("map-cancel-btn");
+  if (cancelBtn) cancelBtn.addEventListener("click", () => {
+    clearRoute();
+    toast(window.App?.lang === "uz" ? "Bekor qilindi" : (window.App?.lang === "ru" ? "Отменено" : "Cancelled"));
+  });
 
   // Tap feedback for buttons that otherwise did nothing.
   const feedback = (sel, msg) =>
@@ -1312,7 +1317,22 @@ async function rebuildRoute() {
     const stopTxt = routeStops.length ? ` · ${routeStops.length} ${uz ? "to'xtash" : "stop"}` : "";
     set("map-eta", `${km} km · ${min} ${uz ? "daqiqa" : "min"}${stopTxt}`, true);
     showReach(kmNum);
+    showCancelBtn(true);
   } catch (_) { toast(uz ? "Yo'l xatosi" : "Route error"); }
+}
+
+// Shows/hides the "Cancel route" button on the map card.
+function showCancelBtn(show) {
+  const b = document.getElementById("map-cancel-btn");
+  if (!b) return;
+  if (show) {
+    const lang = window.App?.lang;
+    const t = document.getElementById("map-cancel-txt");
+    if (t) t.textContent = lang === "ru" ? "Отменить" : (lang === "en" ? "Cancel" : "Bekor qilish");
+    b.style.display = "flex";
+  } else {
+    b.style.display = "none";
+  }
 }
 
 // showReach compares the route distance with the live driving range and tells
@@ -1398,6 +1418,11 @@ function clearRoute() {
   if (routeLine) { leafletMap.removeLayer(routeLine); routeLine = null; }
   if (destMarker) { leafletMap.removeLayer(destMarker); destMarker = null; }
   document.querySelectorAll(".map-chip").forEach((c) => c.classList.remove("on"));
+  showCancelBtn(false);
+  const uz = window.App?.lang === "uz";
+  set("map-dist", "");
+  set("map-eta", uz ? "Manzil yoki shoxobcha tanlang" : "Pick a destination or station", true);
+  set("map-stations", "", true);
 }
 
 // --- Seat adjustment: reclining seat + per-seat memory + 360° spin ---
