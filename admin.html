@@ -72,6 +72,7 @@
       <div class="tab" data-f="active">Faol</div>
       <div class="tab" data-f="all">Hammasi</div>
       <div class="tab" data-f="users">👥 Foydalanuvchilar</div>
+      <div class="tab" data-f="stats">📊 Statistika</div>
       <button class="btn ghost sm" id="refresh" style="margin-left:auto;">↻ Yangilash</button>
     </div>
     <div id="list"></div>
@@ -106,8 +107,11 @@ $("refresh").onclick = load;
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
   t.classList.add("on"); filter = t.dataset.f;
-  $("super").style.display = (filter === "users") ? "none" : $("super").dataset.allowed === "1" ? "block" : "none";
-  if (filter === "users") loadUsers(); else render();
+  const hideSuper = (filter === "users" || filter === "stats");
+  $("super").style.display = (!hideSuper && $("super").dataset.allowed === "1") ? "block" : "none";
+  if (filter === "users") loadUsers();
+  else if (filter === "stats") loadStats();
+  else render();
 });
 
 onAuthStateChanged(auth, (u) => {
@@ -241,6 +245,43 @@ async function removeAdmin(enc) {
   if (!confirm("Adminni o'chirasizmi?")) return;
   const r = await api(`/v1/admin/admins/${enc}`, { method: "DELETE" });
   if (r.ok) loadAdmins(); else alert("Xato: " + r.status);
+}
+
+// --- Analytics ---
+const PRICES = (CFG.payment && CFG.payment.prices) || { "1m": "39 000", "2m": "69 000", "1y": "349 000" };
+function priceNum(t) { return parseInt(String(PRICES[t] || "0").replace(/\D/g, ""), 10) || 0; }
+async function loadStats() {
+  $("list").innerHTML = `<div class="empty">Yuklanmoqda…</div>`;
+  try {
+    const r = await api("/v1/admin/stats");
+    if (r.status === 403) { $("list").innerHTML = `<div class="empty">Ruxsat yo'q.</div>`; return; }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    renderStats(await r.json());
+  } catch (e) { $("list").innerHTML = `<div class="empty">Xato: ${e.message}</div>`; }
+}
+function renderStats(s) {
+  const tiers = s.tiers || {};
+  let revenue = 0;
+  for (const t in tiers) revenue += tiers[t] * priceNum(t);
+  const fmt = (n) => n.toLocaleString("ru-RU");
+  const tile = (v, l, c) => `<div class="card" style="text-align:center;padding:18px 12px;margin:0;">
+    <div style="font-family:'Sora';font-weight:800;font-size:26px;color:${c || '#fff'};">${v}</div>
+    <div class="muted" style="margin-top:4px;">${l}</div></div>`;
+  const tierName = (t) => t === "1y" ? "1 yil" : (/^(\d+)m$/.exec(t) ? RegExp.$1 + " oy" : t);
+  const tierRows = Object.keys(tiers).sort().map(t =>
+    `<div class="row" style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);"><div>${tierName(t)}</div><div class="acts"><span class="badge b-active">${tiers[t]} ta</span></div></div>`).join("") || `<div class="muted">Faol tarif yo'q</div>`;
+  $("list").innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:14px;">
+      ${tile(s.users || 0, "Jami foydalanuvchi")}
+      ${tile((s.active || 0) + (s.trial || 0), "Premium (faol+sinov)", "#43d684")}
+      ${tile(s.trial || 0, "Sinovda", "#a3a3ff")}
+      ${tile(s.pending || 0, "To'lov kutilmoqda", "#FFB454")}
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div class="muted" style="margin-bottom:4px;">Oylik takrorlanuvchi daromad (faol obunalar)</div>
+      <div style="font-family:'Sora';font-weight:800;font-size:30px;color:#fff;">${fmt(revenue)} <span style="font-size:15px;color:#8a8c92;">so'm</span></div>
+    </div>
+    <div class="card"><h2 style="margin-bottom:10px;">Tariflar bo'yicha</h2>${tierRows}</div>`;
 }
 
 async function activate(uid) {

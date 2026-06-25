@@ -579,6 +579,8 @@ function wireControls() {
   App.copyCard = copyCard;
   App.loadFleet = loadFleet;
   App.fleetAll = fleetAll;
+  App.fleetAdd = fleetAdd;
+  App.fleetRemove = fleetRemove;
   App.openAdmin = () => { window.location.href = "admin.html"; };
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
@@ -1981,48 +1983,111 @@ async function openFleet() {
   loadFleet();
 }
 
+// Known vehicle pool (display names) the operator can add to their fleet.
+const FLEET_POOL = {
+  "voyah-001": "Voyah Free", "deepal-002": "Deepal S07",
+  "dongfeng-003": "Dongfeng 008", "byd-004": "BYD",
+};
+let fleetState = { name: "My Fleet", slots: 10, vehicleIds: [] };
+
 async function loadFleet() {
   const uz = window.App?.lang === "uz";
   const list = document.getElementById("fleet-list");
   if (!list) return;
-  const fleet = [
-    { id: "voyah-001", name: "Voyah Free" }, { id: "deepal-002", name: "Deepal S07" },
-    { id: "dongfeng-003", name: "Dongfeng" }, { id: "byd-004", name: "BYD" },
-  ];
   list.innerHTML = `<div style="color:#6a6c72;text-align:center;padding:30px;font-size:13px;">${uz ? "Yuklanmoqda…" : "Loading…"}</div>`;
-  const results = await Promise.all(fleet.map(async (v) => {
+  try {
+    const fr = await apiAuthFetch("/v1/fleet");
+    if (fr.ok) fleetState = await fr.json();
+  } catch (e) {}
+  if (!fleetState.vehicleIds) fleetState.vehicleIds = [];
+
+  const results = await Promise.all(fleetState.vehicleIds.map(async (id) => {
     try {
-      const r = await apiAuthFetch(`/v1/vehicles/${v.id}`);
-      if (r.ok) return { ...v, snap: await r.json() };
+      const r = await apiAuthFetch(`/v1/vehicles/${id}`);
+      if (r.ok) return { id, name: FLEET_POOL[id] || id, snap: await r.json() };
     } catch (e) {}
-    return { ...v, snap: null };
+    return { id, name: FLEET_POOL[id] || id, snap: null };
   }));
-  let online = 0;
-  list.innerHTML = results.map((v) => {
+
+  let online = 0, lockedN = 0, battSum = 0, battN = 0;
+  const rows = results.map((v) => {
     const s = v.snap || {};
     const ok = !!v.snap; if (ok) online++;
-    const batt = typeof s.batteryPct === "number" ? s.batteryPct : (typeof s.soc === "number" ? s.soc : null);
-    const locked = s.locked !== undefined ? s.locked : (s.doorsLocked !== undefined ? s.doorsLocked : null);
-    const range = typeof s.rangeKm === "number" ? s.rangeKm : null;
+    const batt = typeof s.batteryPct === "number" ? s.batteryPct : (typeof s.soc === "number" ? s.soc : (typeof s.energy?.batteryLevel === "number" ? s.energy.batteryLevel : null));
+    const locked = s.locked !== undefined ? s.locked : (s.lock === "locked" || s.lock === true);
+    if (locked) lockedN++;
+    if (batt != null) { battSum += batt; battN++; }
+    const range = typeof s.rangeKm === "number" ? s.rangeKm : (s.energy?.rangeKm ?? null);
     const dotC = !ok ? "#5a5c62" : batt != null && batt < 20 ? "#ff5252" : "#43d684";
-    const lockTxt = locked === null ? "—" : locked ? (uz ? "Qulflangan" : "Locked") : (uz ? "Ochiq" : "Unlocked");
+    const lockTxt = locked ? (uz ? "Qulflangan" : "Locked") : (uz ? "Ochiq" : "Unlocked");
     return `<div class="fleet-card">
       <div class="fleet-dot" style="background:${dotC}"></div>
-      <div style="flex:1">
+      <div style="flex:1;min-width:0">
         <div style="color:#fff;font-weight:700;font-size:14px;font-family:'Sora'">${v.name}</div>
         <div style="color:#8a8c92;font-size:12px;margin-top:2px;">${batt != null ? batt + "% · " : ""}${range != null ? range + " km · " : ""}${lockTxt}</div>
       </div>
-      <i data-lucide="${locked ? "lock" : "lock-open"}" style="width:17px;height:17px;color:${locked ? "#43d684" : "#FF8A3D"}"></i>
+      <i data-lucide="${locked ? "lock" : "lock-open"}" style="width:17px;height:17px;color:${locked ? "#43d684" : "var(--acc)"}"></i>
+      <div class="ibtn" style="width:32px;height:32px;" onclick="App.fleetRemove('${v.id}')"><i data-lucide="x" style="width:15px;height:15px;color:#ff8a8a"></i></div>
     </div>`;
-  }).join("");
+  });
+  list.innerHTML = rows.length ? rows.join("") : `<div style="color:#6a6c72;text-align:center;padding:30px;font-size:13px;">${uz ? "Park bo'sh — mashina qo'shing" : "Empty — add a vehicle"}</div>`;
+
+  // Stats tiles.
+  const avgBatt = battN ? Math.round(battSum / battN) : 0;
+  const stat = (v, l) => `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:13px;padding:9px 6px;text-align:center;"><div style="font-family:'Sora';font-weight:800;font-size:17px;color:#fff;">${v}</div><div style="color:#8a8c92;font-size:10px;margin-top:1px;">${l}</div></div>`;
+  const stats = document.getElementById("fleet-stats");
+  if (stats) stats.innerHTML =
+    stat(results.length, uz ? "Mashina" : "Vehicles") +
+    stat(online, uz ? "Onlayn" : "Online") +
+    stat(lockedN, uz ? "Qulf" : "Locked") +
+    stat(avgBatt + "%", uz ? "O'rt. zaryad" : "Avg batt");
+
   const sub = document.getElementById("fleet-sub");
-  if (sub) { sub.removeAttribute("data-i18n"); sub.textContent = `${results.length} ${uz ? "mashina" : "vehicles"} · ${online} ${uz ? "onlayn" : "online"}`; }
+  if (sub) { sub.removeAttribute("data-i18n"); sub.textContent = `${results.length}/${fleetState.slots} ${uz ? "joy band" : "slots used"}`; }
+
+  // Populate the "add vehicle" dropdown with pool vehicles not yet in the fleet.
+  const sel = document.getElementById("fleet-add-sel");
+  if (sel) {
+    const avail = Object.keys(FLEET_POOL).filter((id) => !fleetState.vehicleIds.includes(id));
+    sel.innerHTML = avail.length
+      ? avail.map((id) => `<option value="${id}">${FLEET_POOL[id]}</option>`).join("")
+      : `<option value="">${uz ? "Barchasi qo'shilgan" : "All added"}</option>`;
+  }
   if (window.lucide) lucide.createIcons();
+}
+
+async function saveFleet() {
+  try {
+    const r = await apiAuthFetch("/v1/fleet", { method: "PUT", body: JSON.stringify(fleetState) });
+    if (r.ok) fleetState = await r.json();
+  } catch (e) {}
+}
+
+async function fleetAdd() {
+  const uz = window.App?.lang === "uz";
+  const sel = document.getElementById("fleet-add-sel");
+  const id = sel && sel.value;
+  if (!id) return;
+  if ((fleetState.vehicleIds || []).length >= fleetState.slots) {
+    toast(uz ? "Joylar to'lgan — rejani kengaytiring" : "No free slots — upgrade plan", "err");
+    return;
+  }
+  fleetState.vehicleIds = [...(fleetState.vehicleIds || []), id];
+  await saveFleet();
+  toast(uz ? "Qo'shildi ✓" : "Added ✓", "ok");
+  loadFleet();
+}
+
+async function fleetRemove(id) {
+  fleetState.vehicleIds = (fleetState.vehicleIds || []).filter((x) => x !== id);
+  await saveFleet();
+  loadFleet();
 }
 
 async function fleetAll(action) {
   const uz = window.App?.lang === "uz";
-  const ids = ["voyah-001", "deepal-002", "dongfeng-003", "byd-004"];
+  const ids = fleetState.vehicleIds || [];
+  if (!ids.length) return;
   toast(uz ? "Bajarilmoqda…" : "Working…");
   await Promise.all(ids.map((id) => apiAuthFetch(`/v1/vehicles/${id}/${action}`, { method: "POST" }).catch(() => {})));
   toast(action === "lock" ? (uz ? "Hammasi qulflandi ✓" : "All locked ✓") : (uz ? "Hammasi ochildi ✓" : "All unlocked ✓"), "ok");
@@ -2033,14 +2098,28 @@ async function fleetAll(action) {
 // --- White-label branding (apply config.branding) ---
 function applyBranding() {
   const b = (CFG && CFG.branding) || {};
-  if (b.accent) {
-    document.documentElement.style.setProperty("--o", b.accent);
-  }
+  const root = document.documentElement.style;
+  // Accent colours — one or two colours recolour every button / ring / logo.
+  if (b.accent) root.setProperty("--g1", b.accent);
+  if (b.accent2) root.setProperty("--g2", b.accent2);
+  if (b.accentSolid || b.accent) root.setProperty("--acc", b.accentSolid || b.accent);
+  // Brand name everywhere it appears.
   if (b.name && b.name !== "VoltDrive") {
     document.querySelectorAll(".brand-name").forEach((el) => (el.textContent = b.name));
     const pn = document.getElementById("profile-name");
     if (pn && pn.textContent === "VoltDrive") pn.textContent = b.name;
-    document.title = b.name + (b.tagline ? " — " + b.tagline : "");
+  }
+  document.title = (b.name || "VoltDrive") + (b.tagline ? " — " + b.tagline : "");
+  // Dealer logo — replace the bolt mark with an image when provided.
+  if (b.logo) {
+    document.querySelectorAll(".brand-mark").forEach((el) => {
+      el.style.background = "#fff";
+      el.style.backgroundImage = `url("${b.logo}")`;
+      el.style.backgroundSize = "78%";
+      el.style.backgroundPosition = "center";
+      el.style.backgroundRepeat = "no-repeat";
+      el.querySelectorAll("svg,i").forEach((c) => (c.style.display = "none"));
+    });
   }
 }
 

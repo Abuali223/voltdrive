@@ -20,11 +20,16 @@ window.VOLTDRIVE_CONFIG = {
   // Web Push (FCM) public VAPID key from Firebase Console → Cloud Messaging.
   vapidKey: "BAn1RT5ijNZwns1IW8WGhWU3ypMYrv7Q3O3CmkeqT3ZTCwrj0YGDJOrMY-6J-nzphj_3Zv5E7duBuJZGKgekYkE",
 
-  // --- White-label branding (a dealer/OEM can rebrand by editing this) ---
+  // --- White-label branding (a dealer/OEM rebrands the whole app from here) ---
+  // Change accent/accent2 to recolour every button, ring and logo; set logo to
+  // an image URL to replace the bolt mark; name shows everywhere "VoltDrive" is.
   branding: {
     name: "VoltDrive",
     tagline: "Smart EV Control",
-    accent: "#FF6A1A", // primary accent; "" keeps the default orange
+    accent: "#FF8A2B",  // gradient start (light)
+    accent2: "#FF4D00", // gradient end (dark)
+    accentSolid: "#FF8A3D", // solid accent (text/icons); "" = derived from accent
+    logo: "", // e.g. "https://dealer.example/logo.png" — empty keeps the bolt
   },
 
   // --- Subscription / billing (temporary manual flow until a gateway) ---

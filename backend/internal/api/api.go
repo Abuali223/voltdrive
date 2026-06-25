@@ -19,6 +19,7 @@ import (
 	"voltdrive/backend/internal/admins"
 	"voltdrive/backend/internal/auth"
 	"voltdrive/backend/internal/devices"
+	"voltdrive/backend/internal/fleet"
 	"voltdrive/backend/internal/geofence"
 	"voltdrive/backend/internal/guestkey"
 	"voltdrive/backend/internal/members"
@@ -44,6 +45,7 @@ type Server struct {
 	Subscriptions    *subscription.Store // optional: freemium plan/billing state
 	Admins           *admins.Store       // optional: additional admin emails (super = OwnerEmail)
 	Users            *users.Store        // optional: sign-in directory (admin user list)
+	Fleets           *fleet.Store        // optional: per-operator fleet dashboard
 	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
 	AllowedOrigins   []string            // CORS allowlist (empty = permissive "*")
 	OwnerEmail       string              // bootstrap fleet owner (full access without a Firestore grant)
@@ -142,9 +144,16 @@ func (s *Server) Routes() http.Handler {
 		mux.HandleFunc("POST /v1/admin/admins", s.guardUser(s.handleAdminsAdd))
 		mux.HandleFunc("DELETE /v1/admin/admins/{email}", s.guardUser(s.handleAdminsRemove))
 	}
-	// User directory (any admin): everyone who has signed in.
+	// User directory + analytics (any admin).
 	if s.Users != nil {
 		mux.HandleFunc("GET /v1/admin/users", s.guardUser(s.handleAdminUsers))
+		mux.HandleFunc("GET /v1/admin/stats", s.guardUser(s.handleAdminStats))
+	}
+
+	// Fleet dashboard (per operator): saved set of vehicles + slot allowance.
+	if s.Fleets != nil {
+		mux.HandleFunc("GET /v1/fleet", s.guardUser(s.handleFleetGet))
+		mux.HandleFunc("PUT /v1/fleet", s.guardUser(s.handleFleetPut))
 	}
 
 	// Real-time telemetry stream (WebSocket).
@@ -867,6 +876,78 @@ func (s *Server) handleAdminUsers(w http.ResponseWriter, r *http.Request, user a
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"users": list, "count": len(list)})
+}
+
+// defaultFleetIDs is the vehicle pool a new operator starts with.
+var defaultFleetIDs = []string{"voyah-001", "deepal-002", "dongfeng-003", "byd-004"}
+
+func (s *Server) handleFleetGet(w http.ResponseWriter, r *http.Request, user auth.User) {
+	f, ok, err := s.Fleets.Get(r.Context(), user.UID)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load fleet")
+		return
+	}
+	if !ok { // first time → seed with the default pool
+		f = fleet.Fleet{Name: "My Fleet", Slots: 10, VehicleIDs: defaultFleetIDs}
+	}
+	writeJSON(w, http.StatusOK, f)
+}
+
+func (s *Server) handleFleetPut(w http.ResponseWriter, r *http.Request, user auth.User) {
+	var f fleet.Fleet
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&f); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if f.Slots <= 0 {
+		f.Slots = 10
+	}
+	if len(f.VehicleIDs) > 200 {
+		writeErr(w, http.StatusBadRequest, "too many vehicles")
+		return
+	}
+	if err := s.Fleets.Put(r.Context(), user.UID, f); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not save fleet")
+		return
+	}
+	writeJSON(w, http.StatusOK, f)
+}
+
+func (s *Server) handleAdminStats(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isAdmin(r.Context(), user) {
+		writeErr(w, http.StatusForbidden, "admin only")
+		return
+	}
+	stats := map[string]any{"users": 0, "active": 0, "trial": 0, "pending": 0, "free": 0, "tiers": map[string]int{}}
+	if s.Users != nil {
+		if list, err := s.Users.List(r.Context()); err == nil {
+			stats["users"] = len(list)
+		}
+	}
+	if s.Subscriptions != nil {
+		if subs, err := s.Subscriptions.All(r.Context()); err == nil {
+			active, trial, pending, free := 0, 0, 0, 0
+			tiers := map[string]int{}
+			for _, sb := range subs {
+				switch sb.Status {
+				case "active":
+					active++
+					if sb.Tier != "" {
+						tiers[sb.Tier]++
+					}
+				case "trial":
+					trial++
+				case "pending":
+					pending++
+				default:
+					free++
+				}
+			}
+			stats["active"], stats["trial"], stats["pending"], stats["free"] = active, trial, pending, free
+			stats["tiers"] = tiers
+		}
+	}
+	writeJSON(w, http.StatusOK, stats)
 }
 
 // maskCode redacts all but the first two characters of a guest code so the
