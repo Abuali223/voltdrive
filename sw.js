@@ -9,7 +9,7 @@
 //
 // On a new deploy, bump VERSION → old caches are deleted and every open tab
 // is reloaded automatically (see index.html update handler).
-const VERSION = "voltdrive-v51";
+const VERSION = "voltdrive-v52";
 const SHELL = [
   "/index.html",
   "/app-live.js",

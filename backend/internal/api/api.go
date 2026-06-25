@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -31,6 +32,7 @@ import (
 	"voltdrive/backend/internal/schedule"
 	"voltdrive/backend/internal/subscription"
 	"voltdrive/backend/internal/users"
+	"voltdrive/backend/internal/voice"
 )
 
 // Server holds dependencies for the HTTP handlers.
@@ -50,6 +52,7 @@ type Server struct {
 	Fleets           *fleet.Store        // optional: per-operator fleet dashboard
 	Branding         *branding.Store     // optional: white-label theme (super-admin editable)
 	Assistant        *assistant.Client   // optional: Gemini-backed AI assistant
+	Voice            *voice.Client       // optional: UzbekVoice STT/TTS proxy
 	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
 	AllowedOrigins   []string            // CORS allowlist (empty = permissive "*")
 	OwnerEmail       string              // bootstrap fleet owner (full access without a Firestore grant)
@@ -165,6 +168,10 @@ func (s *Server) Routes() http.Handler {
 	if s.Assistant != nil {
 		mux.HandleFunc("POST /v1/assistant", s.guardUser(s.handleAssistant))
 	}
+	if s.Voice != nil && s.Voice.Enabled() {
+		mux.HandleFunc("POST /v1/voice/stt", s.guardUserT(80*time.Second, s.handleVoiceSTT))
+		mux.HandleFunc("POST /v1/voice/tts", s.guardUserT(80*time.Second, s.handleVoiceTTS))
+	}
 	if s.Branding != nil {
 		mux.HandleFunc("GET /v1/branding", s.handleBrandingGet)
 		mux.HandleFunc("PUT /v1/admin/branding", s.guardUser(s.handleBrandingPut))
@@ -267,8 +274,13 @@ func (s *Server) guardStream(action auth.Action, next func(http.ResponseWriter, 
 // guardUser authenticates the caller but does not scope to a vehicle — used by
 // account-level endpoints (device registration).
 func (s *Server) guardUser(next func(http.ResponseWriter, *http.Request, auth.User)) http.HandlerFunc {
+	return s.guardUserT(10*time.Second, next)
+}
+
+// guardUserT is guardUser with a custom request timeout (voice STT/TTS need longer).
+func (s *Server) guardUserT(d time.Duration, next func(http.ResponseWriter, *http.Request, auth.User)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), d)
 		defer cancel()
 		user, err := s.Verifier.Verify(ctx, bearerHeader(r))
 		if err != nil {
@@ -727,6 +739,62 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request, user au
 		return
 	}
 	writeJSON(w, http.StatusOK, rep)
+}
+
+// handleVoiceSTT transcribes uploaded Uzbek audio via UzbekVoice.
+func (s *Server) handleVoiceSTT(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.premiumEntitled(r.Context(), user) {
+		writeErr(w, http.StatusPaymentRequired, "premium required")
+		return
+	}
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid form")
+		return
+	}
+	f, hdr, err := r.FormFile("file")
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "audio file required")
+		return
+	}
+	defer f.Close()
+	audio, err := io.ReadAll(io.LimitReader(f, 10<<20))
+	if err != nil || len(audio) == 0 {
+		writeErr(w, http.StatusBadRequest, "empty audio")
+		return
+	}
+	text, err := s.Voice.STT(r.Context(), audio, hdr.Filename)
+	if err != nil {
+		log.Printf("voice stt: %v", err)
+		writeErr(w, http.StatusBadGateway, "stt failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"text": text})
+}
+
+// handleVoiceTTS synthesizes Uzbek speech and streams the audio back.
+func (s *Server) handleVoiceTTS(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.premiumEntitled(r.Context(), user) {
+		writeErr(w, http.StatusPaymentRequired, "premium required")
+		return
+	}
+	var req struct {
+		Text  string `json:"text"`
+		Model string `json:"model"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil || strings.TrimSpace(req.Text) == "" {
+		writeErr(w, http.StatusBadRequest, "text required")
+		return
+	}
+	audio, ct, err := s.Voice.TTS(r.Context(), req.Text, req.Model)
+	if err != nil {
+		log.Printf("voice tts: %v", err)
+		writeErr(w, http.StatusBadGateway, "tts failed")
+		return
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(audio)
 }
 
 func (s *Server) handleSubGet(w http.ResponseWriter, r *http.Request, user auth.User) {

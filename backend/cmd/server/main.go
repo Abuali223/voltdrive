@@ -32,6 +32,7 @@ import (
 	"voltdrive/backend/internal/api"
 	"voltdrive/backend/internal/assistant"
 	"voltdrive/backend/internal/auth"
+	"voltdrive/backend/internal/voice"
 	"voltdrive/backend/internal/branding"
 	"voltdrive/backend/internal/devices"
 	"voltdrive/backend/internal/fleet"
@@ -217,6 +218,7 @@ func main() {
 		Fleets:           fleetStore,
 		Branding:         brandStore,
 		Assistant:        assistClient,
+		Voice:            voice.NewClient(os.Getenv("UZBEKVOICE_API_KEY")),
 		FCM:              fcm,
 		AllowedOrigins:   origins,
 		OwnerEmail:       os.Getenv("OWNER_EMAIL"),

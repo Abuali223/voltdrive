@@ -1467,7 +1467,8 @@ function openAssistant() {
       '</div>' +
       '<div id="ai-msgs" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;min-height:220px;"></div>' +
       '<div style="padding:12px 14px;border-top:1px solid rgba(255,255,255,.06);display:flex;gap:9px;align-items:center;padding-bottom:max(12px,env(safe-area-inset-bottom));">' +
-        '<input id="ai-input" placeholder="' + (uz ? "Masalan: eshikni och" : "e.g. unlock the doors") + '" style="flex:1;height:46px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 14px;font-size:14px;outline:none;font-family:Manrope;">' +
+        '<input id="ai-input" placeholder="' + (uz ? "Yozing yoki 🎤 bosing" : "Type or tap 🎤") + '" style="flex:1;height:46px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 14px;font-size:14px;outline:none;font-family:Manrope;">' +
+        '<div id="ai-mic" style="width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:box-shadow .2s,background .2s;"><i data-lucide="mic" style="width:20px;height:20px;color:#fff"></i></div>' +
         '<div id="ai-send" style="width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#FF8A2B,#FF4D00);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;"><i data-lucide="arrow-up" style="width:20px;height:20px;color:#fff"></i></div>' +
       '</div>' +
     '</div>';
@@ -1475,8 +1476,9 @@ function openAssistant() {
   if (window.lucide) lucide.createIcons();
   const input = o.querySelector("#ai-input");
   o.querySelector("#ai-close").onclick = () => o.remove();
-  const doSend = () => { const t = input.value.trim(); if (t) { input.value = ""; assistantSend(t); } };
+  const doSend = () => { const t = input.value.trim(); if (t) { input.value = ""; assistantSend(t, false); } };
   o.querySelector("#ai-send").onclick = doSend;
+  o.querySelector("#ai-mic").onclick = () => recordToggle(o.querySelector("#ai-mic"));
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") doSend(); });
   if (assistantHistory.length) {
     assistantHistory.forEach((t) => aiBubble(t.role, t.text));
@@ -1488,17 +1490,23 @@ function openAssistant() {
   setTimeout(() => input.focus(), 100);
 }
 
-async function assistantSend(text) {
-  const uz = window.App?.lang === "uz";
+async function assistantSend(text, speak) {
   aiBubble("user", text);
   assistantHistory.push({ role: "user", text });
+  await assistantReply(text, speak);
+}
+
+// Sends the message to the assistant, shows the reply, runs the action and —
+// when speak is true (voice input) — reads the reply aloud in Uzbek.
+async function assistantReply(text, speak) {
+  const uz = window.App?.lang === "uz";
   const typing = aiBubble("model", "…");
   try {
     const tk = await auth.currentUser.getIdToken();
     const res = await fetch(`${CFG.apiBase}/v1/assistant`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` },
-      body: JSON.stringify({ message: text, car: carContext(), history: assistantHistory.slice(-12) }),
+      body: JSON.stringify({ message: text, car: carContext(), history: assistantHistory.slice(0, -1).slice(-12) }),
     });
     if (res.status === 402) { if (typing) typing.textContent = uz ? "Bu Premium funksiya — obuna kerak." : "This is a Premium feature."; return; }
     if (!res.ok) throw new Error("HTTP " + res.status);
@@ -1506,9 +1514,83 @@ async function assistantSend(text) {
     if (typing) typing.textContent = rep.reply || "…";
     assistantHistory.push({ role: "model", text: rep.reply || "" });
     runAssistantAction(rep);
+    if (speak && rep.reply) ttsPlay(rep.reply);
   } catch (e) {
     if (typing) typing.textContent = uz ? "Xatolik — qayta urinib ko'ring." : "Error — try again.";
   }
+}
+
+// ----- Uzbek voice (UzbekVoice STT/TTS via the backend) -----
+let mediaRec = null, recChunks = [], recording = false;
+
+async function recordToggle(btn) {
+  const uz = window.App?.lang === "uz";
+  if (recording) { try { mediaRec && mediaRec.stop(); } catch (_) {} return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recChunks = [];
+    const mime = (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm")) ? "audio/webm"
+      : (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/mp4")) ? "audio/mp4" : "";
+    mediaRec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    mediaRec.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+    mediaRec.onstop = async () => {
+      recording = false; setRecUI(btn, false);
+      stream.getTracks().forEach((t) => t.stop());
+      const blob = new Blob(recChunks, { type: (mediaRec && mediaRec.mimeType) || "audio/webm" });
+      if (blob.size < 800) { toast(uz ? "Ovoz juda qisqa" : "Too short"); return; }
+      await sttSend(blob);
+    };
+    mediaRec.start();
+    recording = true; setRecUI(btn, true);
+    toast(uz ? "Gapiring… (to'xtatish uchun mikrofonni bosing)" : "Speak… (tap the mic to stop)");
+  } catch (e) {
+    toast(uz ? "Mikrofon ochilmadi / ruxsat yo'q" : "Mic unavailable / denied");
+  }
+}
+
+function setRecUI(btn, on) {
+  if (!btn) return;
+  btn.style.background = on ? "#ff4d4d" : "rgba(255,255,255,.08)";
+  btn.style.boxShadow = on ? "0 0 0 4px rgba(255,77,77,.25)" : "none";
+}
+
+async function sttSend(blob) {
+  const uz = window.App?.lang === "uz";
+  const bubble = aiBubble("user", "🎤 …");
+  try {
+    const tk = await auth.currentUser.getIdToken();
+    const ext = (blob.type.indexOf("mp4") >= 0) ? "mp4" : "webm";
+    const fd = new FormData();
+    fd.append("file", blob, "audio." + ext);
+    const res = await fetch(`${CFG.apiBase}/v1/voice/stt`, { method: "POST", headers: { Authorization: `Bearer ${tk}` }, body: fd });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    const text = (data.text || "").trim();
+    if (!text) { if (bubble) bubble.textContent = uz ? "🎤 (tushunolmadim)" : "🎤 (didn't catch that)"; return; }
+    if (bubble) bubble.textContent = text;
+    assistantHistory.push({ role: "user", text });
+    await assistantReply(text, true); // speak the answer
+  } catch (e) {
+    if (bubble) bubble.textContent = uz ? "🎤 xato" : "🎤 error";
+  }
+}
+
+async function ttsPlay(text) {
+  try {
+    const tk = await auth.currentUser.getIdToken();
+    const res = await fetch(`${CFG.apiBase}/v1/voice/tts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) return; // TTS is best-effort; text reply already shown
+    const blob = await res.blob();
+    if (!blob.size) return;
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.onended = () => URL.revokeObjectURL(url);
+    audio.play().catch(() => {});
+  } catch (_) {}
 }
 
 // Executes the action the assistant chose, reusing the existing (RBAC-guarded)
