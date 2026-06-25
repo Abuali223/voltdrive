@@ -155,10 +155,7 @@ function render() {
         ${req ? `<div class="muted">${req}</div>` : ""}
       </div>
       <div class="acts">
-        <select id="t-${s.uid}">
-          <option value="${s.requestedTier || '1m'}">${tierName(s.requestedTier || '1m')}</option>
-          <option value="1m">1 oy</option><option value="2m">2 oy</option><option value="1y">1 yil</option>
-        </select>
+        <select id="t-${s.uid}">${tierOptions(s.requestedTier || '1m')}</select>
         <button class="btn sm" data-act="${s.uid}">Faollashtirish</button>
         <button class="btn red sm" data-rev="${s.uid}">Bekor</button>
       </div>
@@ -168,7 +165,15 @@ function render() {
   $("list").querySelectorAll("[data-rev]").forEach(b => b.onclick = () => revoke(b.dataset.rev));
 }
 
-function tierName(t) { return { "1m": "1 oy", "2m": "2 oy", "1y": "1 yil" }[t] || t; }
+const TIERS = ["1m","2m","3m","4m","5m","6m","7m","8m","9m","10m","11m","1y"];
+function tierName(t) {
+  if (t === "1y") return "1 yil";
+  const m = /^(\d+)m$/.exec(t || "");
+  return m ? m[1] + " oy" : t;
+}
+function tierOptions(cur) {
+  return TIERS.map(t => `<option value="${t}"${t === cur ? " selected" : ""}>${tierName(t)}</option>`).join("");
+}
 
 // --- Super admin: manage admins ---
 let superEmail = "";

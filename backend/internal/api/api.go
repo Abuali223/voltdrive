@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -629,6 +630,19 @@ func (s *Server) handleGuestKeyRevoke(w http.ResponseWriter, r *http.Request, us
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// validTier accepts "1y" or "Nm" for N = 1..11 (the offered durations).
+func validTier(t string) bool {
+	if t == "1y" {
+		return true
+	}
+	if strings.HasSuffix(t, "m") {
+		if n, err := strconv.Atoi(strings.TrimSuffix(t, "m")); err == nil && n >= 1 && n <= 11 {
+			return true
+		}
+	}
+	return false
+}
+
 // isSuperAdmin is the single root admin (OWNER_EMAIL) who manages other admins.
 func (s *Server) isSuperAdmin(u auth.User) bool {
 	return s.OwnerEmail != "" && u.Email != "" && strings.EqualFold(u.Email, s.OwnerEmail)
@@ -687,7 +701,7 @@ func (s *Server) handleSubRequest(w http.ResponseWriter, r *http.Request, user a
 		writeErr(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	if req.Tier != "1m" && req.Tier != "2m" && req.Tier != "1y" {
+	if !validTier(req.Tier) {
 		writeErr(w, http.StatusBadRequest, "invalid tier")
 		return
 	}

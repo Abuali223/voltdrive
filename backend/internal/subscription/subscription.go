@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -44,18 +45,18 @@ func (s Sub) Normalize() Sub {
 	return s
 }
 
-// TierDuration maps a tier code to its length.
+// TierDuration maps a tier code to its length: "1y" = a year, "Nm" = N months
+// (1–11), anything else = one month.
 func TierDuration(tier string) time.Duration {
-	switch tier {
-	case "1m":
-		return 30 * 24 * time.Hour
-	case "2m":
-		return 60 * 24 * time.Hour
-	case "1y":
+	if tier == "1y" {
 		return 365 * 24 * time.Hour
-	default:
-		return 30 * 24 * time.Hour
 	}
+	if strings.HasSuffix(tier, "m") {
+		if n, err := strconv.Atoi(strings.TrimSuffix(tier, "m")); err == nil && n > 0 {
+			return time.Duration(n) * 30 * 24 * time.Hour
+		}
+	}
+	return 30 * 24 * time.Hour
 }
 
 // Store reads/writes subscriptions via the Firestore REST API.
