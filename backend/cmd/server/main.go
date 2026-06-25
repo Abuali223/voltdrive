@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -36,6 +35,7 @@ import (
 	"voltdrive/backend/internal/voice"
 	"voltdrive/backend/internal/branding"
 	"voltdrive/backend/internal/devices"
+	"voltdrive/backend/internal/diagnostics"
 	"voltdrive/backend/internal/fleet"
 	"voltdrive/backend/internal/gcp"
 	"voltdrive/backend/internal/geofence"
@@ -185,10 +185,10 @@ func main() {
 
 	// Proactive AI diagnostics: periodically analyze each vehicle's telemetry and
 	// push a notification when it newly enters a warning/critical state.
-	if assistClient != nil && alerter != nil {
-		go runDiagnostics(context.Background(), registry, assistClient, alerter,
+	if alerter != nil {
+		go runDiagnostics(context.Background(), registry, alerter,
 			[]string{"voyah-001", "deepal-002", "dongfeng-003", "byd-004"})
-		log.Printf("diagnostics: proactive AI health watcher enabled")
+		log.Printf("diagnostics: proactive rule-based health watcher enabled")
 	}
 
 	hubCtx, hubCancel := context.WithCancel(context.Background())
@@ -272,11 +272,13 @@ func main() {
 // Across multiple Cloud Run instances, each timed action is guarded by a
 // Firestore claim (store.Claim), so a warm-up or alert fires exactly once even
 // when several instances tick simultaneously.
-// runDiagnostics periodically runs the AI car-health analysis on each vehicle
-// and pushes a notification when a vehicle newly enters a warning/critical state.
-func runDiagnostics(ctx context.Context, registry *provider.Registry, assist *assistant.Client, alerter *notify.FCMAlerter, ids []string) {
-	last := map[string]string{}
-	t := time.NewTicker(30 * time.Minute)
+// runDiagnostics periodically runs FAST rule-based health checks (no AI/cost)
+// on each vehicle and pushes a notification only when a NEW warning/critical
+// issue appears. The AI (Gemini) is reserved for the user's on-demand
+// "Diagnose" tap, so always-on monitoring stays free.
+func runDiagnostics(ctx context.Context, registry *provider.Registry, alerter *notify.FCMAlerter, ids []string) {
+	last := map[string]string{} // vehicle -> signature of the last alerted issue set
+	t := time.NewTicker(15 * time.Minute)
 	defer t.Stop()
 	for {
 		for _, id := range ids {
@@ -284,23 +286,22 @@ func runDiagnostics(ctx context.Context, registry *provider.Registry, assist *as
 			if err != nil {
 				continue
 			}
-			carJSON, _ := json.Marshal(snap)
-			rep, err := assist.Diagnose(ctx, string(carJSON), "Uzbek")
-			if err != nil {
-				log.Printf("diagnostics %s: %v", id, err)
+			var titles []string
+			for _, is := range diagnostics.Check(snap) {
+				if is.Severity == "warning" || is.Severity == "critical" {
+					titles = append(titles, is.Title)
+				}
+			}
+			if len(titles) == 0 {
+				last[id] = ""
 				continue
 			}
-			if (rep.Status == "warning" || rep.Status == "critical") && last[id] != rep.Status {
-				msg := rep.Summary
-				if len(rep.Issues) > 0 && rep.Issues[0].Title != "" {
-					msg = rep.Issues[0].Title
-					if rep.Issues[0].Advice != "" {
-						msg += " — " + rep.Issues[0].Advice
-					}
-				}
-				alerter.VehicleAlert(ctx, id, "diagnostic", msg)
+			sig := strings.Join(titles, "|")
+			if sig == last[id] {
+				continue // already alerted for this exact set of issues
 			}
-			last[id] = rep.Status
+			last[id] = sig
+			alerter.VehicleAlert(ctx, id, "diagnostic", strings.Join(titles, " · "))
 		}
 		select {
 		case <-ctx.Done():
