@@ -76,11 +76,12 @@ func (f *FirebaseVerifier) Verify(ctx context.Context, token string) (User, erro
 
 	// Validate claims.
 	var claims struct {
-		Iss   string `json:"iss"`
-		Aud   string `json:"aud"`
-		Sub   string `json:"sub"`
-		Exp   int64  `json:"exp"`
-		Email string `json:"email"`
+		Iss           string `json:"iss"`
+		Aud           string `json:"aud"`
+		Sub           string `json:"sub"`
+		Exp           int64  `json:"exp"`
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
 	}
 	if err := decodeSegment(parts[1], &claims); err != nil {
 		return User{}, ErrUnauthenticated
@@ -92,7 +93,7 @@ func (f *FirebaseVerifier) Verify(ctx context.Context, token string) (User, erro
 	if time.Now().Unix() >= claims.Exp {
 		return User{}, ErrUnauthenticated
 	}
-	return User{UID: claims.Sub, Email: claims.Email}, nil
+	return User{UID: claims.Sub, Email: claims.Email, EmailVerified: claims.EmailVerified}, nil
 }
 
 func (f *FirebaseVerifier) keyForKid(ctx context.Context, kid string) (*rsa.PublicKey, error) {

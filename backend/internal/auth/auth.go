@@ -52,8 +52,9 @@ func ValidRole(r Role) bool { _, ok := permissions[r]; return ok }
 
 // User is the verified identity extracted from a token.
 type User struct {
-	UID   string
-	Email string
+	UID           string
+	Email         string
+	EmailVerified bool
 }
 
 // ErrUnauthenticated / ErrForbidden are returned by the API layer.
@@ -84,7 +85,7 @@ func (DevVerifier) Verify(_ context.Context, token string) (User, error) {
 		return User{}, ErrUnauthenticated
 	}
 	parts := strings.SplitN(token, ":", 2)
-	u := User{UID: parts[0]}
+	u := User{UID: parts[0], EmailVerified: true} // local dev: treat as verified
 	if len(parts) == 2 {
 		u.Email = parts[1]
 	}

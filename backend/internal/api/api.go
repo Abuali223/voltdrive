@@ -663,7 +663,9 @@ func validTier(t string) bool {
 
 // isSuperAdmin is the single root admin (OWNER_EMAIL) who manages other admins.
 func (s *Server) isSuperAdmin(u auth.User) bool {
-	return s.OwnerEmail != "" && u.Email != "" && strings.EqualFold(u.Email, s.OwnerEmail)
+	// Admin authority is keyed by email, so the email MUST be verified —
+	// otherwise an unverified sign-up could claim the owner's address.
+	return s.OwnerEmail != "" && u.Email != "" && u.EmailVerified && strings.EqualFold(u.Email, s.OwnerEmail)
 }
 
 // isAdmin reports whether the caller may use the admin panel: the super admin,
@@ -672,7 +674,21 @@ func (s *Server) isAdmin(ctx context.Context, u auth.User) bool {
 	if s.isSuperAdmin(u) {
 		return true
 	}
-	return s.Admins != nil && u.Email != "" && s.Admins.IsAdmin(ctx, u.Email)
+	return s.Admins != nil && u.Email != "" && u.EmailVerified && s.Admins.IsAdmin(ctx, u.Email)
+}
+
+// fleetEntitled reports whether the caller may use the (PRO) fleet feature:
+// an active subscription, or any admin. Enforced server-side so the paywall
+// cannot be bypassed by calling the API directly.
+func (s *Server) fleetEntitled(ctx context.Context, u auth.User) bool {
+	if s.isAdmin(ctx, u) {
+		return true
+	}
+	if s.Subscriptions == nil {
+		return true // billing not wired (dev) → don't block
+	}
+	sub, err := s.Subscriptions.Get(ctx, u.UID)
+	return err == nil && sub.Active()
 }
 
 func (s *Server) handleSubGet(w http.ResponseWriter, r *http.Request, user auth.User) {
@@ -891,6 +907,10 @@ func (s *Server) handleAdminUsers(w http.ResponseWriter, r *http.Request, user a
 var defaultFleetIDs = []string{"voyah-001", "deepal-002", "dongfeng-003", "byd-004"}
 
 func (s *Server) handleFleetGet(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.fleetEntitled(r.Context(), user) {
+		writeErr(w, http.StatusPaymentRequired, "premium required")
+		return
+	}
 	f, ok, err := s.Fleets.Get(r.Context(), user.UID)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "could not load fleet")
@@ -903,6 +923,10 @@ func (s *Server) handleFleetGet(w http.ResponseWriter, r *http.Request, user aut
 }
 
 func (s *Server) handleFleetPut(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.fleetEntitled(r.Context(), user) {
+		writeErr(w, http.StatusPaymentRequired, "premium required")
+		return
+	}
 	var f fleet.Fleet
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&f); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid JSON body")
