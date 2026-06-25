@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoltDrive — AI + CAN: To'liq imkoniyatlar</title>
+<meta name="description" content="VoltDrive: sun'iy intellekt va CAN qurilma bilan har qanday mashinani to'liq nazorat qilish.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --o1:#FF8A2B; --o2:#FF4D00; --ink:#0a0b0d; --ink2:#121317;
+    --txt:#f4f5f7; --mut:#9a9ca4; --line:rgba(255,255,255,.09);
+    --grad:linear-gradient(135deg,#FF8A2B,#FF4D00);
+    --cyan:#34d6e8; --green:#3ddc84; --violet:#9a7bff;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;background:var(--ink);color:var(--txt);font-family:'Manrope',system-ui,sans-serif;}
+  h1,h2,h3,.sora{font-family:'Sora',sans-serif;}
+  .bg{position:fixed;inset:0;z-index:0;overflow:hidden;background:radial-gradient(120% 90% at 50% -10%,#1d1e23 0%,#0d0e11 55%,#08090b 100%);}
+  .orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:.5;mix-blend-mode:screen;}
+  .orb.a{width:520px;height:520px;background:radial-gradient(circle,#FF6A1A,transparent 70%);top:-160px;left:-120px;animation:float1 16s ease-in-out infinite;}
+  .orb.b{width:460px;height:460px;background:radial-gradient(circle,#FF3D00,transparent 70%);bottom:-180px;right:-120px;animation:float2 20s ease-in-out infinite;}
+  .orb.c{width:340px;height:340px;background:radial-gradient(circle,#9a7bff,transparent 70%);top:40%;left:55%;opacity:.22;animation:float1 24s ease-in-out infinite reverse;}
+  @keyframes float1{0%,100%{transform:translate(0,0)}50%{transform:translate(60px,40px)}}
+  @keyframes float2{0%,100%{transform:translate(0,0)}50%{transform:translate(-50px,-40px)}}
+  .grid-bg{position:absolute;inset:0;opacity:.04;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:46px 46px;mask:radial-gradient(circle at 50% 40%,#000,transparent 80%);}
+  .deck{position:relative;z-index:2;height:100%;}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:6vh 7vw;opacity:0;pointer-events:none;transform:scale(.98);transition:opacity .5s ease,transform .5s ease;overflow-y:auto;}
+  .slide.active{opacity:1;pointer-events:auto;transform:none;}
+  [data-r]{opacity:0;transform:translateY(26px);transition:opacity .6s cubic-bezier(.2,.7,.2,1),transform .6s cubic-bezier(.2,.7,.2,1);}
+  .slide.active [data-r]{opacity:1;transform:none;}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--o1);margin-bottom:16px;}
+  .kicker::before{content:"";width:26px;height:2px;background:var(--grad);border-radius:2px;}
+  h1{font-size:clamp(30px,5.2vw,66px);font-weight:800;line-height:1.05;letter-spacing:-1.5px;}
+  h2{font-size:clamp(25px,3.8vw,46px);font-weight:800;line-height:1.1;letter-spacing:-1px;}
+  .lead{font-size:clamp(14px,1.9vw,20px);color:var(--mut);max-width:800px;line-height:1.6;margin-top:16px;}
+  .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .logo{display:flex;align-items:center;gap:14px;}
+  .bolt{width:62px;height:62px;border-radius:18px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 14px 36px -8px rgba(255,90,0,.7);animation:glow 2.4s ease-in-out infinite;}
+  @keyframes glow{0%,100%{box-shadow:0 14px 36px -10px rgba(255,90,0,.55);transform:translateY(0)}50%{box-shadow:0 22px 50px -8px rgba(255,90,0,.9);transform:translateY(-3px)}}
+  .logo .nm{font-family:'Sora';font-weight:800;font-size:30px;letter-spacing:-.5px;}
+  .grid{display:grid;gap:14px;margin-top:26px;}
+  .g2{grid-template-columns:repeat(2,1fr);} .g3{grid-template-columns:repeat(3,1fr);}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid var(--line);border-radius:18px;padding:18px 16px;transition:transform .3s,border-color .3s,background .3s;}
+  .card:hover{transform:translateY(-6px);border-color:rgba(255,138,43,.5);background:linear-gradient(180deg,rgba(255,138,43,.12),rgba(255,255,255,.02));}
+  .ico{width:46px;height:46px;border-radius:13px;background:rgba(255,138,43,.14);display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:12px;}
+  .ico.cy{background:rgba(52,214,232,.14);} .ico.gr{background:rgba(61,220,132,.14);} .ico.vi{background:rgba(154,123,255,.14);}
+  .card h4{font-family:'Sora';font-size:16px;font-weight:700;margin-bottom:5px;}
+  .card p{font-size:12.5px;color:var(--mut);line-height:1.5;}
+  /* flow */
+  .flow{display:flex;align-items:flex-start;justify-content:center;margin-top:36px;flex-wrap:wrap;}
+  .node{flex:1;min-width:110px;max-width:175px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:9px;padding:5px;}
+  .node .nb{width:80px;height:80px;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:34px;background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02));border:1px solid var(--line);}
+  .node.ai .nb{border-color:rgba(154,123,255,.6);box-shadow:0 0 28px -6px rgba(154,123,255,.7);background:radial-gradient(circle,rgba(154,123,255,.18),rgba(255,255,255,.02));}
+  .node.hl .nb{border-color:rgba(255,138,43,.6);box-shadow:0 0 26px -6px rgba(255,90,0,.6);}
+  .node .nt{font-family:'Sora';font-weight:700;font-size:13.5px;}
+  .node .ns{font-size:11px;color:var(--mut);line-height:1.3;}
+  .wire{flex:0 0 46px;align-self:flex-start;margin-top:38px;height:4px;border-radius:4px;position:relative;background:linear-gradient(90deg,rgba(255,138,43,.25),rgba(154,123,255,.25));overflow:hidden;}
+  .wire::after{content:"";position:absolute;top:-2px;left:0;width:13px;height:8px;border-radius:8px;background:var(--o1);box-shadow:0 0 12px var(--o1);animation:travel 1.8s linear infinite;}
+  @keyframes travel{from{left:-15px}to{left:100%}}
+  /* chat mock */
+  .chat{max-width:440px;margin-top:24px;display:flex;flex-direction:column;gap:10px;}
+  .bub{max-width:80%;padding:11px 14px;border-radius:16px;font-size:14px;line-height:1.45;}
+  .bub.u{align-self:flex-end;background:var(--grad);color:#fff;border-bottom-right-radius:5px;}
+  .bub.a{align-self:flex-start;background:rgba(255,255,255,.07);border:1px solid var(--line);border-bottom-left-radius:5px;}
+  .bub .act{display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:var(--green);}
+  /* diag report */
+  .report{max-width:420px;margin-top:22px;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:18px;padding:18px;}
+  .rhead{display:flex;align-items:center;gap:9px;font-family:'Sora';font-weight:800;font-size:16px;margin-bottom:12px;}
+  .ritem{border-left:3px solid var(--o1);padding:6px 0 6px 12px;margin-top:10px;}
+  .ritem.w{border-color:#FF8A3D;} .ritem.c{border-color:#ff5252;}
+  .ritem b{font-size:13.5px;} .ritem div{font-size:12px;color:var(--mut);margin-top:2px;}
+  .blist{list-style:none;display:flex;flex-direction:column;gap:14px;margin-top:22px;}
+  .blist li{display:flex;gap:13px;align-items:flex-start;font-size:15.5px;line-height:1.5;}
+  .blist .dot{flex:0 0 auto;width:28px;height:28px;border-radius:9px;background:rgba(61,220,132,.16);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;margin-top:1px;}
+  .blist b{color:var(--txt);} .blist span{color:var(--mut);}
+  .stats{display:flex;gap:42px;flex-wrap:wrap;margin-top:32px;}
+  .stat .num{font-family:'Sora';font-weight:800;font-size:clamp(30px,4.6vw,52px);background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1;}
+  .stat .lbl{color:var(--mut);font-size:13px;margin-top:7px;font-weight:600;}
+  .pills{display:flex;gap:9px;flex-wrap:wrap;margin-top:22px;}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border-radius:30px;background:rgba(255,255,255,.05);border:1px solid var(--line);font-size:13px;font-weight:600;}
+  .pill.live{border-color:rgba(61,220,132,.4);color:var(--green);}
+  .pill.soon{border-color:rgba(255,138,43,.4);color:var(--o1);}
+  .progress{position:fixed;top:0;left:0;height:3px;background:var(--grad);z-index:30;transition:width .4s;box-shadow:0 0 12px rgba(255,90,0,.7);}
+  .nav{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:16px;background:rgba(16,17,20,.7);backdrop-filter:blur(12px);padding:8px 14px;border-radius:40px;border:1px solid var(--line);}
+  .nav button{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--txt);font-size:18px;cursor:pointer;transition:background .2s;display:flex;align-items:center;justify-content:center;}
+  .nav button:hover{background:rgba(255,138,43,.25);}
+  .dots{display:flex;gap:7px;} .dots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22);cursor:pointer;transition:all .25s;}
+  .dots i.on{background:var(--grad);width:22px;border-radius:4px;}
+  .count{position:fixed;top:20px;right:24px;z-index:30;font-family:'Sora';font-weight:700;font-size:13px;color:var(--mut);} .count b{color:var(--txt);}
+  .brandtag{position:fixed;top:18px;left:24px;z-index:30;display:flex;align-items:center;gap:9px;}
+  .brandtag .b{width:30px;height:30px;border-radius:9px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .brandtag .t{font-family:'Sora';font-weight:800;font-size:15px;}
+  .hint{position:fixed;bottom:24px;right:24px;z-index:30;color:var(--mut);font-size:12px;}
+  @media(max-width:860px){
+    .g3,.g2{grid-template-columns:1fr;} .flow{flex-direction:column;align-items:center;}
+    .wire{flex-basis:26px;transform:rotate(90deg);margin:6px 0;} .node{max-width:none;}
+    .stats{gap:24px;} .hint,.brandtag{display:none;} .slide{padding:8vh 6vw;}
+  }
+</style>
+</head>
+<body>
+<div class="bg"><div class="orb a"></div><div class="orb b"></div><div class="orb c"></div><div class="grid-bg"></div></div>
+<div class="progress" id="prog"></div>
+<div class="brandtag"><div class="b">⚡</div><div class="t">VoltDrive</div></div>
+<div class="count"><b id="cur">01</b> / <span id="tot">13</span></div>
+
+<div class="deck">
+
+  <!-- 1 Hero -->
+  <section class="slide active">
+    <div class="logo" data-r><div class="bolt">⚡</div><div class="nm">VoltDrive</div></div>
+    <div class="kicker" data-r style="margin-top:30px;">Sun'iy intellekt × CAN qurilma</div>
+    <h1 data-r>Mashinangiz bilan <span class="grad">gaplashing.</span><br>U <span class="grad">o'ylab</span> javob bersin.</h1>
+    <p class="lead" data-r>VoltDrive — CAN qurilma orqali har qanday mashinaga ulanadi va sun'iy intellekt
+      bilan boshqaradi: ovozli buyruq, erkin suhbat, AI diagnostika va to'liq masofaviy nazorat — o'zbek tilida.</p>
+    <div class="stats">
+      <div class="stat" data-r><div class="num">∞</div><div class="lbl">Har qanday brend</div></div>
+      <div class="stat" data-r><div class="num">🎤 UZ</div><div class="lbl">Ovozli o'zbekcha AI</div></div>
+      <div class="stat" data-r><div class="num">1–3s</div><div class="lbl">Javob / komanda</div></div>
+    </div>
+  </section>
+
+  <!-- 2 Overview -->
+  <section class="slide">
+    <div class="kicker" data-r>Bugun nima qila olamiz</div>
+    <h2 data-r>Bir qarashda <span class="grad">imkoniyatlar</span></h2>
+    <div class="grid g3">
+      <div class="card" data-r><div class="ico vi">🤖</div><h4>AI yordamchi</h4><p>Mashina bilan tabiiy suhbat — savol bering, buyruq bering.</p></div>
+      <div class="card" data-r><div class="ico">🎤</div><h4>Ovozli boshqaruv</h4><p>O'zbekcha gapiring — eshitadi, bajaradi, ovozda javob beradi.</p></div>
+      <div class="card" data-r><div class="ico gr">🩺</div><h4>AI Diagnostika</h4><p>Nosozliklarni aniqlaydi va ogohlantiradi — proaktiv.</p></div>
+      <div class="card" data-r><div class="ico cy">📡</div><h4>Masofaviy boshqaruv</h4><p>Eshik, dvigatel, klimat, GPS — qayerda bo'lsangiz ham.</p></div>
+      <div class="card" data-r><div class="ico">🛡️</div><h4>Xavfsizlik</h4><p>Geofence, panik, o'g'irlik ogohlantirishi.</p></div>
+      <div class="card" data-r><div class="ico vi">🏷️</div><h4>Har qanday brend</h4><p>BYD, Voyah, Deepal, Chevrolet — CAN orqali universal.</p></div>
+    </div>
+  </section>
+
+  <!-- 3 Architecture with AI -->
+  <section class="slide">
+    <div class="kicker" data-r>To'liq tizim</div>
+    <h2 data-r>AI butun zanjirning <span class="grad">markazida</span></h2>
+    <div class="flow" data-r>
+      <div class="node hl"><div class="nb">🚗</div><div class="nt">Mashina</div><div class="ns">CAN qurilma</div></div>
+      <div class="wire"></div>
+      <div class="node"><div class="nb">☁️</div><div class="nt">Server</div><div class="ns">Bizning bulut</div></div>
+      <div class="wire"></div>
+      <div class="node ai"><div class="nb">🧠</div><div class="nt">AI (Gemini)</div><div class="ns">Tushunadi · qaror qiladi</div></div>
+      <div class="wire"></div>
+      <div class="node hl"><div class="nb">📱</div><div class="nt">Ilova</div><div class="ns">Ovoz · chat · nazorat</div></div>
+    </div>
+    <p class="lead" data-r style="margin-top:28px;text-align:center;margin-left:auto;margin-right:auto;">
+      CAN qurilma haqiqiy mashina ma'lumotini oladi → server → <b class="grad">AI tahlil qiladi va buyruqni tushunadi</b> →
+      mashina bajaradi. Hammasi <b>bizning serverimiz</b> orqali.</p>
+  </section>
+
+  <!-- 4 AI assistant chat -->
+  <section class="slide">
+    <div class="kicker" data-r>AI yordamchi</div>
+    <h2 data-r>Tabiiy tilda <span class="grad">buyruq</span> va <span class="grad">suhbat</span></h2>
+    <div class="chat">
+      <div class="bub u" data-r>Eshikni och</div>
+      <div class="bub a" data-r>Eshiklar qulfdan chiqarildi. <span class="act">✓ UNLOCK bajarildi</span></div>
+      <div class="bub u" data-r>Zaryad qancha qolgan?</div>
+      <div class="bub a" data-r>Voyah Free 62% zaryadlangan — bu ~205 km masofaga yetadi.</div>
+      <div class="bub u" data-r>Salonni 22 darajaga isit</div>
+      <div class="bub a" data-r>Salon harorati 22°C ga o'rnatilmoqda. <span class="act">✓ CLIMATE</span></div>
+    </div>
+    <p class="lead" data-r>AI savolni tushunadi, jonli ma'lumotdan javob beradi <b>va</b> mashinani boshqaradi — bir oynada.</p>
+  </section>
+
+  <!-- 5 Voice -->
+  <section class="slide">
+    <div class="kicker" data-r>Ovozli o'zbekcha</div>
+    <h2 data-r>Gapiring — mashina <span class="grad">eshitadi</span></h2>
+    <div class="grid g3">
+      <div class="card" data-r><div class="ico">🎤</div><h4>1. Gapiring</h4><p>"Eshikni och", "Samarqandga yetadimi?" — o'zbekcha.</p></div>
+      <div class="card" data-r><div class="ico vi">🧠</div><h4>2. AI tushunadi</h4><p>UzbekVoice ovozni matnga, Gemini ma'noni tushunadi.</p></div>
+      <div class="card" data-r><div class="ico gr">🔊</div><h4>3. Javob beradi</h4><p>Bajaradi va o'zbek ovozida o'qib beradi.</p></div>
+    </div>
+    <p class="lead" data-r style="margin-top:22px;">Haydash paytida qo'lsiz — mashina uchun ideal. <b>UzbekVoice + Gemini</b> birga ishlaydi.</p>
+  </section>
+
+  <!-- 6 AI Diagnostics -->
+  <section class="slide">
+    <div class="kicker" data-r>AI Diagnostika</div>
+    <h2 data-r>Nosozlikni <span class="grad">o'zi sezadi</span></h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:center;">
+      <div class="report" data-r>
+        <div class="rhead"><span>⚠️</span><span style="color:#FF8A3D">E'tibor bering</span></div>
+        <div style="font-size:13px;color:#e8e9ec;">Mashina umuman yaxshi holatda, lekin 2 nuqtaga e'tibor bering.</div>
+        <div class="ritem w"><b>Klimat yoqilgan qolgan</b><div>Batareya sarflanyapti — o'chiring.</div></div>
+        <div class="ritem c"><b>Old chap shina bosimi past</b><div>Yaqin shahobchada tekshiring.</div></div>
+      </div>
+      <div data-r>
+        <ul class="blist">
+          <li><span class="dot">🩺</span><span><b>On-demand:</b> tugmani bosing — AI to'liq sog'liq hisobotini beradi.</span></li>
+          <li><span class="dot">🔔</span><span><b>Proaktiv:</b> muammo paydo bo'lsa, o'zi push ogohlantirish yuboradi.</span></li>
+          <li><span class="dot">🔧</span><span><b>CAN bilan:</b> haqiqiy nosozlik kodlarini (DTC) oddiy tilga o'giradi.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 CAN control capabilities -->
+  <section class="slide">
+    <div class="kicker" data-r>CAN orqali boshqaruv</div>
+    <h2 data-r>Mashinaning <span class="grad">har bir tugmasi</span></h2>
+    <div class="grid g3">
+      <div class="card" data-r><div class="ico">🔓</div><h4>Quluf</h4><p>Eshik, bagaj — ochish/yopish.</p></div>
+      <div class="card" data-r><div class="ico">🚀</div><h4>Dvigatel</h4><p>Masofadan start/stop.</p></div>
+      <div class="card" data-r><div class="ico gr">❄️</div><h4>Klimat</h4><p>Oldindan isitish/sovutish.</p></div>
+      <div class="card" data-r><div class="ico cy">📍</div><h4>GPS</h4><p>Jonli joylashuv, marshrut.</p></div>
+      <div class="card" data-r><div class="ico">📢</div><h4>Signal / Farlar</h4><p>Mashinani topish.</p></div>
+      <div class="card" data-r><div class="ico">🔋</div><h4>Zaryad / Yoqilg'i</h4><p>Holat, masofa, zaryad nazorati.</p></div>
+    </div>
+    <p class="lead" data-r style="margin-top:20px;">Va bularning barchasini <b>AI orqali ovoz bilan</b> ham boshqarasiz.</p>
+  </section>
+
+  <!-- 8 Capabilities you gain -->
+  <section class="slide">
+    <div class="kicker" data-r>Siz qo'lga kiritasiz</div>
+    <h2 data-r>Qanday <span class="grad">imkoniyatlar</span></h2>
+    <ul class="blist" data-r style="max-width:860px;">
+      <li><span class="dot">✓</span><span><b>Har qanday mashinani to'liq nazorat</b> — zavod API'siz, brenddan qat'i nazar (CAN qurilma).</span></li>
+      <li><span class="dot">✓</span><span><b>Sun'iy intellektli interfeys</b> — ovoz va suhbat orqali, o'zbek tilida. Raqobatchilarda yo'q.</span></li>
+      <li><span class="dot">✓</span><span><b>AI diagnostika</b> — nosozlikni oldindan aytadi, xarajatni kamaytiradi.</span></li>
+      <li><span class="dot">✓</span><span><b>Xavfsizlik</b> — geofence, panik, o'g'irlik ogohlantirishi.</span></li>
+      <li><span class="dot">✓</span><span><b>Daromad</b> — qurilma + o'rnatish + obuna + white-label (B2B) + fleet.</span></li>
+    </ul>
+  </section>
+
+  <!-- 9 Why unique -->
+  <section class="slide">
+    <div class="kicker" data-r>Nega noyob</div>
+    <h2 data-r>Raqobatchilarda <span class="grad">yo'q</span></h2>
+    <div class="grid g2">
+      <div class="card" data-r><div class="ico vi">🇺🇿</div><h4>O'zbekcha AI ovoz</h4><p>Mahalliy bozor uchun — UzbekVoice bilan. Hech kimda yo'q.</p></div>
+      <div class="card" data-r><div class="ico">🏷️</div><h4>Brenddan mustaqil</h4><p>Xitoy brendlari ham — zavod ruxsati shart emas.</p></div>
+      <div class="card" data-r><div class="ico gr">🔒</div><h4>O'z serverimiz</h4><p>Ma'lumot uchinchi tomon bulutidan o'tmaydi — maxfiylik.</p></div>
+      <div class="card" data-r><div class="ico cy">🧠</div><h4>AI tabiiy interfeys</h4><p>Tugma emas — gaplashasiz. Kelajak avtomobili tajribasi.</p></div>
+    </div>
+  </section>
+
+  <!-- 10 Business model -->
+  <section class="slide">
+    <div class="kicker" data-r>Daromad modeli</div>
+    <h2 data-r>Bir nechta <span class="grad">tushum manbai</span></h2>
+    <div class="grid g3">
+      <div class="card" data-r><div class="ico">💳</div><h4>Premium obuna</h4><p>Oylik/yillik + oilaviy. AI, diagnostika, fleet — premium.</p></div>
+      <div class="card" data-r><div class="ico vi">🏢</div><h4>White-label (B2B)</h4><p>Dilerlar/OEM o'z brendi bilan — biz yetkazib beramiz.</p></div>
+      <div class="card" data-r><div class="ico cy">🚙</div><h4>Fleet boshqaruvi</h4><p>Park egalariga — barcha mashinalar bitta panelda.</p></div>
+    </div>
+    <p class="lead" data-r style="margin-top:20px;">+ Qurilma sotish va o'rnatish. AI xarajati <b>obunaga ta'sir qilmaydi</b> (proaktiv qism bepul).</p>
+  </section>
+
+  <!-- 11 Current status -->
+  <section class="slide">
+    <div class="kicker" data-r>Joriy holat</div>
+    <h2 data-r>Nima <span class="grad">tayyor</span></h2>
+    <div class="pills">
+      <span class="pill live" data-r>✅ AI chat (o'zbekcha)</span>
+      <span class="pill live" data-r>✅ Ovozli boshqaruv</span>
+      <span class="pill live" data-r>✅ AI Diagnostika</span>
+      <span class="pill live" data-r>✅ Masofaviy boshqaruv</span>
+      <span class="pill live" data-r>✅ Xavfsizlik / geofence</span>
+      <span class="pill live" data-r>✅ Premium / White-label / Fleet</span>
+      <span class="pill live" data-r>✅ PWA + Android (TWA)</span>
+      <span class="pill soon" data-r>⏳ CAN qurilma (yo'lda)</span>
+    </div>
+    <p class="lead" data-r style="margin-top:26px;">Dasturning <b>hamma qismi jonli</b> va ishlayapti. Yetishmayotgani faqat <b class="grad">CAN qurilma</b> —
+      u kelgach, simulyatsiya o'rniga <b>haqiqiy mashina</b> ulanadi va to'liq imkoniyat ochiladi.</p>
+  </section>
+
+  <!-- 12 The leap -->
+  <section class="slide">
+    <div class="kicker" data-r>Qurilma kelganda</div>
+    <h2 data-r>Simulyatsiyadan <span class="grad">haqiqiy mashinaga</span></h2>
+    <div class="grid g2">
+      <div class="card" data-r><div class="ico">🔌</div><h4>1 qurilma o'rnatiladi</h4><p>15–30 daqiqa. Mashina CAN-busiga ulanadi.</p></div>
+      <div class="card" data-r><div class="ico cy">⚙️</div><h4>Profil bir marta sozlanadi</h4><p>Shu model uchun — keyin har mashina avtomatik.</p></div>
+      <div class="card" data-r><div class="ico gr">🧠</div><h4>AI darhol ishlaydi</h4><p>Ilova, ovoz, diagnostika — hammasi tayyor, ulanadi xolos.</p></div>
+      <div class="card" data-r><div class="ico vi">📈</div><h4>Minglab mashinaga</h4><p>Profil kutubxonasi o'sgani sayin oson kengayadi.</p></div>
+    </div>
+    <p class="lead" data-r style="margin-top:18px;">Ya'ni: <b>dastur kutmaydi — qurilma ulanishi bilan to'liq ishlaydi.</b></p>
+  </section>
+
+  <!-- 13 Closing -->
+  <section class="slide" style="text-align:center;align-items:center;">
+    <div class="logo" data-r style="justify-content:center;"><div class="bolt">⚡</div><div class="nm">VoltDrive</div></div>
+    <h1 data-r style="margin-top:28px;">Bir qurilma.<br>Har qanday mashina.<br><span class="grad">Sun'iy intellekt bilan.</span></h1>
+    <p class="lead" data-r style="margin-left:auto;margin-right:auto;">Ovozli o'zbekcha AI, diagnostika va to'liq masofaviy nazorat —
+      CAN qurilma orqali har qanday mashinada. Kelajak avtomobili tajribasi, bugun.</p>
+    <div class="stats" data-r style="justify-content:center;">
+      <div class="stat"><div class="num">🎤</div><div class="lbl">Ovozli AI (UZ)</div></div>
+      <div class="stat"><div class="num">🩺</div><div class="lbl">AI diagnostika</div></div>
+      <div class="stat"><div class="num">∞</div><div class="lbl">Mashina / brend</div></div>
+    </div>
+  </section>
+
+</div>
+
+<div class="nav">
+  <button id="prev" aria-label="Oldingi">‹</button>
+  <div class="dots" id="dots"></div>
+  <button id="next" aria-label="Keyingi">›</button>
+</div>
+<div class="hint">← → · skroll · swipe</div>
+
+<script>
+(function(){
+  const slides=[...document.querySelectorAll('.slide')];
+  const dotsWrap=document.getElementById('dots');
+  const prog=document.getElementById('prog'), cur=document.getElementById('cur'), tot=document.getElementById('tot');
+  let i=0;
+  tot.textContent=String(slides.length).padStart(2,'0');
+  slides.forEach((_,n)=>{const d=document.createElement('i');d.onclick=()=>go(n);dotsWrap.appendChild(d);});
+  const dots=[...dotsWrap.children];
+  function stagger(s){s.querySelectorAll('[data-r]').forEach((el,n)=>{el.style.transitionDelay=(n*0.07)+'s';});}
+  function go(n){
+    if(n<0||n>=slides.length||(n===i&&slides[i].classList.contains('active')))return;
+    slides[i].classList.remove('active');
+    i=n;const s=slides[i];stagger(s);s.classList.add('active');
+    dots.forEach((d,k)=>d.classList.toggle('on',k===i));
+    cur.textContent=String(i+1).padStart(2,'0');
+    prog.style.width=((i+1)/slides.length*100)+'%';
+    s.scrollTop=0;
+  }
+  function next(){go(Math.min(i+1,slides.length-1));}
+  function prev(){go(Math.max(i-1,0));}
+  document.getElementById('next').onclick=next;
+  document.getElementById('prev').onclick=prev;
+  addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' ')next();
+    else if(e.key==='ArrowLeft'||e.key==='PageUp')prev();
+    else if(e.key==='Home')go(0); else if(e.key==='End')go(slides.length-1);
+  });
+  let wt=0;
+  addEventListener('wheel',e=>{const now=Date.now();if(now-wt<700)return;if(Math.abs(e.deltaY)<18)return;wt=now;e.deltaY>0?next():prev();},{passive:true});
+  let sx=0,sy=0;
+  addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
+  addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;
+    if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>50)dx<0?next():prev();});
+  stagger(slides[0]);dots[0].classList.add('on');prog.style.width=(1/slides.length*100)+'%';
+})();
+</script>
+</body>
+</html>
