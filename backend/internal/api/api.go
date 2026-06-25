@@ -26,6 +26,7 @@ import (
 	"voltdrive/backend/internal/realtime"
 	"voltdrive/backend/internal/schedule"
 	"voltdrive/backend/internal/subscription"
+	"voltdrive/backend/internal/users"
 )
 
 // Server holds dependencies for the HTTP handlers.
@@ -41,6 +42,7 @@ type Server struct {
 	Geofences        *geofence.Store     // optional: safe-zone storage
 	Subscriptions    *subscription.Store // optional: freemium plan/billing state
 	Admins           *admins.Store       // optional: additional admin emails (super = OwnerEmail)
+	Users            *users.Store        // optional: sign-in directory (admin user list)
 	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
 	AllowedOrigins   []string            // CORS allowlist (empty = permissive "*")
 	OwnerEmail       string              // bootstrap fleet owner (full access without a Firestore grant)
@@ -138,6 +140,10 @@ func (s *Server) Routes() http.Handler {
 		mux.HandleFunc("GET /v1/admin/admins", s.guardUser(s.handleAdminsList))
 		mux.HandleFunc("POST /v1/admin/admins", s.guardUser(s.handleAdminsAdd))
 		mux.HandleFunc("DELETE /v1/admin/admins/{email}", s.guardUser(s.handleAdminsRemove))
+	}
+	// User directory (any admin): everyone who has signed in.
+	if s.Users != nil {
+		mux.HandleFunc("GET /v1/admin/users", s.guardUser(s.handleAdminUsers))
 	}
 
 	// Real-time telemetry stream (WebSocket).
@@ -638,6 +644,10 @@ func (s *Server) isAdmin(ctx context.Context, u auth.User) bool {
 }
 
 func (s *Server) handleSubGet(w http.ResponseWriter, r *http.Request, user auth.User) {
+	// Record the user in the directory (best-effort, off the response path).
+	if s.Users != nil {
+		go s.Users.Touch(context.Background(), user.UID, user.Email)
+	}
 	sub, err := s.Subscriptions.Get(r.Context(), user.UID)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "could not load subscription")
@@ -830,6 +840,19 @@ func (s *Server) handleAdminsRemove(w http.ResponseWriter, r *http.Request, user
 	}
 	audit(r, user, email, "admin:remove", nil)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleAdminUsers(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isAdmin(r.Context(), user) {
+		writeErr(w, http.StatusForbidden, "admin only")
+		return
+	}
+	list, err := s.Users.List(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not list users")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"users": list, "count": len(list)})
 }
 
 // maskCode redacts all but the first two characters of a guest code so the

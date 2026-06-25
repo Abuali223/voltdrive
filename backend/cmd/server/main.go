@@ -44,6 +44,7 @@ import (
 	"voltdrive/backend/internal/rtdb"
 	"voltdrive/backend/internal/schedule"
 	"voltdrive/backend/internal/subscription"
+	"voltdrive/backend/internal/users"
 )
 
 func main() {
@@ -115,6 +116,7 @@ func main() {
 	var geoStore *geofence.Store
 	var subStore *subscription.Store
 	var adminStore *admins.Store
+	var userStore *users.Store
 	if projectID != "" {
 		dsToken := gcp.NewTokenSource("https://www.googleapis.com/auth/datastore").Token
 		scheduleStore = schedule.NewStore(projectID, dsToken)
@@ -122,6 +124,7 @@ func main() {
 		geoStore = geofence.NewStore(projectID, dsToken)
 		subStore = subscription.NewStore(projectID, dsToken)
 		adminStore = admins.NewStore(projectID, dsToken)
+		userStore = users.NewStore(projectID, dsToken)
 		// Note: the scheduler/geofence watcher is started after FCM setup below,
 		// so geofence-exit events can be pushed to the owner's devices.
 	}
@@ -199,6 +202,7 @@ func main() {
 		Geofences:        geoStore,
 		Subscriptions:    subStore,
 		Admins:           adminStore,
+		Users:            userStore,
 		FCM:              fcm,
 		AllowedOrigins:   origins,
 		OwnerEmail:       os.Getenv("OWNER_EMAIL"),

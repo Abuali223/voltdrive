@@ -56,6 +56,7 @@
       <div class="tab on" data-f="pending">Kutilayotgan</div>
       <div class="tab" data-f="active">Faol</div>
       <div class="tab" data-f="all">Hammasi</div>
+      <div class="tab" data-f="users">👥 Foydalanuvchilar</div>
       <button class="btn ghost sm" id="refresh" style="margin-left:auto;">↻ Yangilash</button>
     </div>
     <div id="list"></div>
@@ -90,7 +91,9 @@ $("gbtn").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch(
 $("refresh").onclick = load;
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
-  t.classList.add("on"); filter = t.dataset.f; render();
+  t.classList.add("on"); filter = t.dataset.f;
+  $("super").style.display = (filter === "users") ? "none" : $("super").dataset.allowed === "1" ? "block" : "none";
+  if (filter === "users") loadUsers(); else render();
 });
 
 onAuthStateChanged(auth, (u) => {
@@ -162,9 +165,39 @@ async function loadAdmins() {
     if (!r.ok) return;
     const d = await r.json();
     superEmail = (d.super || "").toLowerCase();
-    $("super").style.display = "block";
+    $("super").dataset.allowed = "1";
+    if (filter !== "users") $("super").style.display = "block";
     renderAdmins(d.admins || []);
   } catch (e) {}
+}
+
+// --- Users directory ---
+async function loadUsers() {
+  $("list").innerHTML = `<div class="empty">Yuklanmoqda…</div>`;
+  try {
+    const r = await api("/v1/admin/users");
+    if (r.status === 403) { $("list").innerHTML = `<div class="empty">Ruxsat yo'q.</div>`; return; }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    renderUsers(d.users || []);
+  } catch (e) { $("list").innerHTML = `<div class="empty">Xato: ${e.message}</div>`; }
+}
+function renderUsers(list) {
+  const subMap = {}; subs.forEach(s => subMap[s.uid] = s);
+  list.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+  if (!list.length) { $("list").innerHTML = `<div class="empty">Hozircha foydalanuvchi yo'q.</div>`; return; }
+  $("list").innerHTML = `<div class="muted" style="margin-bottom:10px;">Jami: ${list.length} foydalanuvchi</div>` + list.map(u => {
+    const sb = subMap[u.uid];
+    const st = sb ? sb.status : "none";
+    const plan = (st === "active" || st === "trial") ? `<span class="badge b-${st}">${st}</span>` : `<span class="badge b-none">free</span>`;
+    return `<div class="card"><div class="row">
+      <div>
+        <div class="email">${u.email || u.uid}</div>
+        <div class="muted">Oxirgi kirish: ${fmtDate(u.lastSeen)} · ro'yxatdan: ${fmtDate(u.firstSeen)}</div>
+      </div>
+      <div class="acts">${plan}</div>
+    </div></div>`;
+  }).join("");
 }
 function renderAdmins(list) {
   const rows = [];
