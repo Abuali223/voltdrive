@@ -53,6 +53,8 @@ func titleForKind(kind string) string {
 		return "VoltDrive — Xavfsizlik ⚠️"
 	case "geofence_exit":
 		return "VoltDrive — Xavfsiz hudud ⚠️"
+	case "diagnostic":
+		return "VoltDrive — Diagnostika 🩺"
 	default:
 		return "VoltDrive"
 	}

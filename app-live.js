@@ -1465,6 +1465,9 @@ function openAssistant() {
         '<div style="flex:1;"><div style="font-family:\'Sora\';font-weight:800;font-size:16px;color:#fff;">AI yordamchi</div><div style="font-size:11px;color:#7e8086;">' + (uz ? "Mashina bilan gaplashing" : "Talk to your car") + '</div></div>' +
         '<div id="ai-close" style="color:#9a9ca2;font-size:24px;line-height:1;cursor:pointer;padding:4px 6px;">×</div>' +
       '</div>' +
+      '<div style="padding:9px 14px 0;display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<div id="ai-diag" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:11px;background:rgba(255,138,43,.14);border:1px solid rgba(255,138,43,.3);color:#FF9D5C;font-size:12px;font-weight:700;cursor:pointer;"><i data-lucide="stethoscope" style="width:14px;height:14px"></i>' + (uz ? "Diagnostika" : "Diagnose") + '</div>' +
+      '</div>' +
       '<div id="ai-msgs" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;min-height:220px;"></div>' +
       '<div style="padding:12px 14px;border-top:1px solid rgba(255,255,255,.06);display:flex;gap:9px;align-items:center;padding-bottom:max(12px,env(safe-area-inset-bottom));">' +
         '<input id="ai-input" placeholder="' + (uz ? "Yozing yoki 🎤 bosing" : "Type or tap 🎤") + '" style="flex:1;height:46px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 14px;font-size:14px;outline:none;font-family:Manrope;">' +
@@ -1479,6 +1482,7 @@ function openAssistant() {
   const doSend = () => { const t = input.value.trim(); if (t) { input.value = ""; assistantSend(t, false); } };
   o.querySelector("#ai-send").onclick = doSend;
   o.querySelector("#ai-mic").onclick = () => recordToggle(o.querySelector("#ai-mic"));
+  o.querySelector("#ai-diag").onclick = runDiagnose;
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") doSend(); });
   if (assistantHistory.length) {
     assistantHistory.forEach((t) => aiBubble(t.role, t.text));
@@ -1605,6 +1609,51 @@ function runAssistantAction(rep) {
     return;
   }
   if (["lock", "unlock", "start", "stop"].includes(a)) sendCommand(a, null);
+}
+
+// AI car-health diagnostics: analyze the current telemetry and render a report.
+async function runDiagnose() {
+  const uz = window.App?.lang === "uz";
+  aiBubble("user", "🩺 " + (uz ? "Diagnostika" : "Diagnose"));
+  const typing = aiBubble("model", "…");
+  try {
+    const tk = await auth.currentUser.getIdToken();
+    const langMap = { uz: "Uzbek", ru: "Russian", en: "English" };
+    const res = await fetch(`${CFG.apiBase}/v1/diagnose`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` },
+      body: JSON.stringify({ car: carContext(), lang: langMap[window.App?.lang] || "Uzbek" }),
+    });
+    if (res.status === 402) { if (typing) typing.textContent = uz ? "Bu Premium funksiya." : "Premium feature."; return; }
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const rep = await res.json();
+    if (typing) typing.remove();
+    diagBubble(rep);
+  } catch (e) {
+    if (typing) typing.textContent = uz ? "Xatolik — qayta urinib ko'ring." : "Error — try again.";
+  }
+}
+
+function diagBubble(rep) {
+  const box = document.getElementById("ai-msgs");
+  if (!box) return;
+  const uz = window.App?.lang === "uz";
+  const st = rep.status || "ok";
+  const color = st === "critical" ? "#ff5252" : st === "warning" ? "#FF8A3D" : "#43d684";
+  const icon = st === "critical" ? "⛔" : st === "warning" ? "⚠️" : "✅";
+  const label = st === "critical" ? (uz ? "Shoshilinch" : "Critical") : st === "warning" ? (uz ? "E'tibor bering" : "Warning") : (uz ? "Hammasi joyida" : "All good");
+  let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:16px">${icon}</span><b style="color:${color};">${label}</b></div>`;
+  html += `<div style="font-size:13px;color:#e8e9ec;">${escapeHtml(rep.summary || "")}</div>`;
+  (rep.issues || []).forEach((it) => {
+    const c = it.severity === "critical" ? "#ff5252" : it.severity === "warning" ? "#FF8A3D" : "#9a9ca2";
+    html += `<div style="border-left:3px solid ${c};padding:5px 0 5px 9px;margin-top:8px;"><div style="font-weight:700;font-size:13px;color:#fff;">${escapeHtml(it.title || "")}</div>` +
+      (it.advice ? `<div style="font-size:12px;color:#9a9ca2;margin-top:2px;">${escapeHtml(it.advice)}</div>` : "") + `</div>`;
+  });
+  const b = document.createElement("div");
+  b.style.cssText = "align-self:flex-start;max-width:90%;padding:12px 14px;border-radius:15px;background:rgba(255,255,255,.06);border-bottom-left-radius:5px;";
+  b.innerHTML = html;
+  box.appendChild(b);
+  box.scrollTop = box.scrollHeight;
 }
 
 function clearRoute() {

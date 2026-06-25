@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -182,6 +183,14 @@ func main() {
 		log.Printf("scheduler: departure timer + geofence watcher enabled")
 	}
 
+	// Proactive AI diagnostics: periodically analyze each vehicle's telemetry and
+	// push a notification when it newly enters a warning/critical state.
+	if assistClient != nil && alerter != nil {
+		go runDiagnostics(context.Background(), registry, assistClient, alerter,
+			[]string{"voyah-001", "deepal-002", "dongfeng-003", "byd-004"})
+		log.Printf("diagnostics: proactive AI health watcher enabled")
+	}
+
 	hubCtx, hubCancel := context.WithCancel(context.Background())
 	defer hubCancel()
 	go hub.Run(hubCtx, 2*time.Second)
@@ -263,6 +272,44 @@ func main() {
 // Across multiple Cloud Run instances, each timed action is guarded by a
 // Firestore claim (store.Claim), so a warm-up or alert fires exactly once even
 // when several instances tick simultaneously.
+// runDiagnostics periodically runs the AI car-health analysis on each vehicle
+// and pushes a notification when a vehicle newly enters a warning/critical state.
+func runDiagnostics(ctx context.Context, registry *provider.Registry, assist *assistant.Client, alerter *notify.FCMAlerter, ids []string) {
+	last := map[string]string{}
+	t := time.NewTicker(30 * time.Minute)
+	defer t.Stop()
+	for {
+		for _, id := range ids {
+			snap, err := registry.For(id).Snapshot(ctx, id)
+			if err != nil {
+				continue
+			}
+			carJSON, _ := json.Marshal(snap)
+			rep, err := assist.Diagnose(ctx, string(carJSON), "Uzbek")
+			if err != nil {
+				log.Printf("diagnostics %s: %v", id, err)
+				continue
+			}
+			if (rep.Status == "warning" || rep.Status == "critical") && last[id] != rep.Status {
+				msg := rep.Summary
+				if len(rep.Issues) > 0 && rep.Issues[0].Title != "" {
+					msg = rep.Issues[0].Title
+					if rep.Issues[0].Advice != "" {
+						msg += " — " + rep.Issues[0].Advice
+					}
+				}
+				alerter.VehicleAlert(ctx, id, "diagnostic", msg)
+			}
+			last[id] = rep.Status
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
 func runScheduler(store *schedule.Store, geo *geofence.Store, registry *provider.Registry, alerter *notify.FCMAlerter) {
 	const offset = 5 * time.Hour // Tashkent, no DST
 	inside := map[string]bool{}  // last known in-zone state per vehicle

@@ -94,15 +94,30 @@ func (c *Client) Ask(ctx context.Context, userMsg, carJSON string, history []Tur
 			},
 		},
 	}
+	raw, err := c.call(ctx, body)
+	if err != nil {
+		return Reply{}, err
+	}
+	var r Reply
+	if err := json.Unmarshal([]byte(raw), &r); err != nil {
+		return Reply{Text: raw, Action: "none"}, nil // tolerate non-JSON, show as plain text
+	}
+	if r.Action == "" {
+		r.Action = "none"
+	}
+	return r, nil
+}
+
+// call POSTs the request body to the model and returns the candidate text,
+// retrying briefly on Vertex's bursty 429/503 (dynamic shared quota).
+func (c *Client) call(ctx context.Context, body map[string]any) (string, error) {
 	j, _ := json.Marshal(body)
 	url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent",
 		c.location, c.project, c.location, c.model)
 	tok, err := c.token(ctx)
 	if err != nil {
-		return Reply{}, err
+		return "", err
 	}
-	// Vertex AI uses dynamic shared quota, so 429/503 come in bursts — retry
-	// a few times with a short backoff before giving up.
 	var resp *http.Response
 	for attempt := 0; ; attempt++ {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(j))
@@ -110,7 +125,7 @@ func (c *Client) Ask(ctx context.Context, userMsg, carJSON string, history []Tur
 		req.Header.Set("Authorization", "Bearer "+tok)
 		resp, err = c.http.Do(req)
 		if err != nil {
-			return Reply{}, err
+			return "", err
 		}
 		if (resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode != http.StatusServiceUnavailable) || attempt >= 3 {
 			break
@@ -118,7 +133,7 @@ func (c *Client) Ask(ctx context.Context, userMsg, carJSON string, history []Tur
 		resp.Body.Close()
 		select {
 		case <-ctx.Done():
-			return Reply{}, ctx.Err()
+			return "", ctx.Err()
 		case <-time.After(time.Duration(300*(attempt+1)) * time.Millisecond):
 		}
 	}
@@ -126,7 +141,7 @@ func (c *Client) Ask(ctx context.Context, userMsg, carJSON string, history []Tur
 	if resp.StatusCode != http.StatusOK {
 		var b bytes.Buffer
 		_, _ = b.ReadFrom(resp.Body)
-		return Reply{}, fmt.Errorf("gemini %s: %s", resp.Status, b.String())
+		return "", fmt.Errorf("gemini %s: %s", resp.Status, b.String())
 	}
 	var gr struct {
 		Candidates []struct {
@@ -138,18 +153,79 @@ func (c *Client) Ask(ctx context.Context, userMsg, carJSON string, history []Tur
 		} `json:"candidates"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&gr); err != nil {
-		return Reply{}, err
+		return "", err
 	}
 	if len(gr.Candidates) == 0 || len(gr.Candidates[0].Content.Parts) == 0 {
-		return Reply{Action: "none"}, nil
+		return "", nil
 	}
-	raw := gr.Candidates[0].Content.Parts[0].Text
-	var r Reply
-	if err := json.Unmarshal([]byte(raw), &r); err != nil {
-		return Reply{Text: raw, Action: "none"}, nil // tolerate non-JSON, show as plain text
+	return gr.Candidates[0].Content.Parts[0].Text, nil
+}
+
+// DiagReport is a structured car-health assessment.
+type DiagReport struct {
+	Status  string  `json:"status"` // ok | warning | critical
+	Summary string  `json:"summary"`
+	Issues  []Issue `json:"issues"`
+}
+
+// Issue is a single detected problem or thing to watch.
+type Issue struct {
+	Severity string `json:"severity"` // info | warning | critical
+	Title    string `json:"title"`
+	Advice   string `json:"advice,omitempty"`
+}
+
+const diagTmpl = `You are VoltDrive's car diagnostics AI. Analyze the car's current telemetry and report its health. ` +
+	`Reply in %s (default Uzbek). Be concise and practical. ` +
+	`Flag any problems or things to watch: low or fast-draining battery, plugged in but not charging, ` +
+	`doors left unlocked, climate left on, abnormal cabin temperature, and (when present) any fault codes. ` +
+	`status: "ok" (all good), "warning" (minor issues), or "critical" (urgent). ` +
+	`Each issue: a short title and one line of practical advice. ` +
+	`If everything looks fine, status "ok", empty issues, and a short reassuring summary. ` +
+	`Use ONLY the telemetry below — never invent faults. Telemetry (JSON): %s`
+
+// Diagnose analyzes the car telemetry and returns a structured health report.
+func (c *Client) Diagnose(ctx context.Context, carJSON, lang string) (DiagReport, error) {
+	if lang == "" {
+		lang = "Uzbek"
 	}
-	if r.Action == "" {
-		r.Action = "none"
+	body := map[string]any{
+		"systemInstruction": map[string]any{"parts": []map[string]any{{"text": fmt.Sprintf(diagTmpl, lang, carJSON)}}},
+		"contents":          []map[string]any{{"role": "user", "parts": []map[string]any{{"text": "Mashinani tekshir."}}}},
+		"generationConfig": map[string]any{
+			"temperature":      0.3,
+			"maxOutputTokens":  600,
+			"thinkingConfig":   map[string]any{"thinkingBudget": 0},
+			"responseMimeType": "application/json",
+			"responseSchema": map[string]any{
+				"type": "OBJECT",
+				"properties": map[string]any{
+					"status":  map[string]any{"type": "STRING", "enum": []string{"ok", "warning", "critical"}},
+					"summary": map[string]any{"type": "STRING"},
+					"issues": map[string]any{"type": "ARRAY", "items": map[string]any{
+						"type": "OBJECT",
+						"properties": map[string]any{
+							"severity": map[string]any{"type": "STRING", "enum": []string{"info", "warning", "critical"}},
+							"title":    map[string]any{"type": "STRING"},
+							"advice":   map[string]any{"type": "STRING"},
+						},
+						"required": []string{"severity", "title"},
+					}},
+				},
+				"required": []string{"status", "summary"},
+			},
+		},
 	}
-	return r, nil
+	raw, err := c.call(ctx, body)
+	if err != nil {
+		return DiagReport{}, err
+	}
+	var d DiagReport
+	if err := json.Unmarshal([]byte(raw), &d); err != nil {
+		return DiagReport{Status: "ok", Summary: raw}, nil
+	}
+	if d.Status == "" {
+		d.Status = "ok"
+	}
+	return d, nil
 }

@@ -167,6 +167,7 @@ func (s *Server) Routes() http.Handler {
 	// super-admin write (the branding panel).
 	if s.Assistant != nil {
 		mux.HandleFunc("POST /v1/assistant", s.guardUser(s.handleAssistant))
+		mux.HandleFunc("POST /v1/diagnose", s.guardUser(s.handleDiagnose))
 	}
 	if s.Voice != nil && s.Voice.Enabled() {
 		mux.HandleFunc("POST /v1/voice/stt", s.guardUserT(80*time.Second, s.handleVoiceSTT))
@@ -736,6 +737,30 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request, user au
 	if err != nil {
 		log.Printf("assistant error: %v", err)
 		writeErr(w, http.StatusBadGateway, "assistant unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, rep)
+}
+
+// handleDiagnose runs the AI car-health analysis on the supplied telemetry.
+func (s *Server) handleDiagnose(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.premiumEntitled(r.Context(), user) {
+		writeErr(w, http.StatusPaymentRequired, "premium required")
+		return
+	}
+	var req struct {
+		Car  json.RawMessage `json:"car"`
+		Lang string          `json:"lang"`
+	}
+	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req)
+	carJSON := "{}"
+	if len(req.Car) > 0 {
+		carJSON = string(req.Car)
+	}
+	rep, err := s.Assistant.Diagnose(r.Context(), carJSON, req.Lang)
+	if err != nil {
+		log.Printf("diagnose error: %v", err)
+		writeErr(w, http.StatusBadGateway, "diagnose failed")
 		return
 	}
 	writeJSON(w, http.StatusOK, rep)
