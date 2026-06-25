@@ -876,6 +876,34 @@ function wireExtras() {
   if (dec) dec.addEventListener("click", () => { climateTemp = Math.max(16, climateTemp - 1); climateChanged(); });
   if (inc) inc.addEventListener("click", () => { climateTemp = Math.min(30, climateTemp + 1); climateChanged(); });
 
+  // Temperature dial — drag around the ring (16–30°). Pointer capture +
+  // touch-action:none keep it smooth, and a wrap-guard stops the value from
+  // flipping min↔max when the finger crosses 12 o'clock.
+  const ring = document.getElementById("climate-ring");
+  if (ring) {
+    ring.style.touchAction = "none";
+    ring.style.cursor = "pointer";
+    let dragging = false;
+    const fromPointer = (clientX, clientY) => {
+      const r = ring.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      let deg = Math.atan2(clientX - cx, -(clientY - cy)) * 180 / Math.PI; // 0 = top, clockwise
+      if (deg < 0) deg += 360;
+      let t = Math.max(16, Math.min(30, Math.round(16 + (deg / 360) * 14)));
+      if (dragging && Math.abs(t - climateTemp) > 7) return; // ignore boundary wrap
+      if (t !== climateTemp) { climateTemp = t; climateChanged(); }
+    };
+    ring.addEventListener("pointerdown", (e) => {
+      try { ring.setPointerCapture(e.pointerId); } catch (_) {}
+      fromPointer(e.clientX, e.clientY); // dragging still false → tap jumps freely
+      dragging = true;
+      e.preventDefault();
+    });
+    ring.addEventListener("pointermove", (e) => { if (dragging) { fromPointer(e.clientX, e.clientY); e.preventDefault(); } });
+    ring.addEventListener("pointerup", (e) => { dragging = false; try { ring.releasePointerCapture(e.pointerId); } catch (_) {} });
+    ring.addEventListener("pointercancel", () => { dragging = false; });
+  }
+
   // Climate power: turn HVAC on/off (backend command).
   const pw = document.getElementById("climate-power");
   if (pw) pw.addEventListener("click", () => { climateOn = !climateOn; climateChanged(); });
