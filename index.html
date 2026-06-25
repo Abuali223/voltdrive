@@ -773,6 +773,11 @@ body{
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.fleet">Fleet dashboard</div>
         <span style="font-size:10px;font-weight:800;color:#0a0b0d;background:linear-gradient(150deg,#FF8A2B,#FF4D00);padding:3px 8px;border-radius:6px;letter-spacing:.5px;">PRO</span>
       </div>
+      <div class="prow" id="admin-row" style="display:none;" onclick="App.openAdmin()">
+        <div class="chip sm neu" style="background:linear-gradient(150deg,#FF8A2B,#FF4D00);"><i data-lucide="shield-alert" style="width:16px;height:16px;color:#fff"></i></div>
+        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.admin">Admin panel</div>
+        <span id="admin-badge" style="font-size:10px;font-weight:800;color:#0a0b0d;background:linear-gradient(150deg,#FFCf6a,#FF8A2B);padding:3px 8px;border-radius:6px;letter-spacing:.5px;">ADMIN</span>
+      </div>
       <div class="prow" onclick="App.enableNotifications()">
         <div class="chip sm neu"><i data-lucide="bell" style="width:16px;height:16px"></i></div>
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.notif">Notifications</div>
@@ -1063,7 +1068,7 @@ const App = {
     'family.limited':'Ограниченный','family.invite':'Пригласить через Gmail',
     'lbl.home':'Главная',
     'alerts.title':'Уведомления','alerts.empty':'Пока нет уведомлений',
-    'profile.fleet':'Панель автопарка',
+    'profile.fleet':'Панель автопарка','profile.admin':'Админ-панель',
     'prem.title':'Премиум','prem.head':'Безграничный контроль. Один тариф.',
     'prem.lead':'С Премиум — автопрогрев, безопасная зона, семейный доступ и приоритетная поддержка.',
     'prem.trial':'Попробовать 14 дней бесплатно','prem.trial.sub':'Без карты · отмена в любой момент',
@@ -1234,6 +1239,7 @@ const App = {
   copyCard() {},
   loadFleet() {},
   fleetAll() {},
+  openAdmin() {},
   panic() {},
 
   // Add a vehicle to the garage. Lists supported, backend-seeded cars that

@@ -127,6 +127,7 @@ function boot() {
           showUser(user);
           try { subscribe(); } catch (e) { console.warn("subscribe:", e); }
           refreshSubscription(); // load the user's plan for the profile + gating
+          checkAdminAccess();    // show the Admin panel row for admins
           // Security gate: ask for a PIN before entering (set up first time).
           await lockGate(user.uid);
           // Winter convenience: offer a one-tap warm-up before entering.
@@ -578,6 +579,7 @@ function wireControls() {
   App.copyCard = copyCard;
   App.loadFleet = loadFleet;
   App.fleetAll = fleetAll;
+  App.openAdmin = () => { window.location.href = "admin.html"; };
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
   const origLights = App.toggleLights.bind(App);
@@ -1852,6 +1854,21 @@ async function refreshSubscription() {
     const r = await apiAuthFetch("/v1/subscription");
     if (r.ok) { currentSub = await r.json(); renderPlanBadge(); }
   } catch (e) {}
+}
+
+// Reveal the in-app Admin panel row only for admins / super admins.
+async function checkAdminAccess() {
+  if (!CFG.apiBase || !auth?.currentUser) return;
+  const row = document.getElementById("admin-row");
+  if (!row) return;
+  try {
+    const r = await apiAuthFetch("/v1/admin/whoami");
+    if (!r.ok) { row.style.display = "none"; return; }
+    const d = await r.json();
+    row.style.display = d.admin ? "flex" : "none";
+    const badge = document.getElementById("admin-badge");
+    if (badge && d.super) badge.textContent = "SUPER";
+  } catch (e) { row.style.display = "none"; }
 }
 
 function planActive() { return currentSub && (currentSub.status === "trial" || currentSub.status === "active"); }
