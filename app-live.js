@@ -835,22 +835,29 @@ function wireExtras() {
     return;
   }
 
-  // Sliders: tap or drag to set a 0-100% value.
+  // Sliders: tap or drag to set a 0-100% value. Pointer capture keeps the drag
+  // tracking even when the finger leaves the bar, and touch-action:none stops
+  // the page from scrolling mid-drag — together they make the drag feel smooth.
   document.querySelectorAll(".vd-slider").forEach((sl) => {
+    sl.style.touchAction = "none";
+    const fill = sl.querySelector(".vd-fill");
+    const val = sl.parentElement.querySelector(".vd-sval");
     const apply = (clientX) => {
       const rect = sl.getBoundingClientRect();
-      let pct = Math.round(((clientX - rect.left) / rect.width) * 100);
-      pct = Math.max(0, Math.min(100, pct));
-      const fill = sl.querySelector(".vd-fill");
-      if (fill) fill.style.width = pct + "%";
-      const val = sl.parentElement.querySelector(".vd-sval");
-      if (val) val.textContent = pct + "%";
+      const raw = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+      if (fill) fill.style.width = raw + "%";          // precise → buttery fill
+      if (val) val.textContent = Math.round(raw) + "%"; // integer label
     };
     let down = false;
-    sl.addEventListener("pointerdown", (e) => { down = true; apply(e.clientX); });
-    sl.addEventListener("pointermove", (e) => { if (down) apply(e.clientX); });
-    window.addEventListener("pointerup", () => { down = false; });
-    sl.addEventListener("click", (e) => apply(e.clientX));
+    sl.addEventListener("pointerdown", (e) => {
+      down = true;
+      try { sl.setPointerCapture(e.pointerId); } catch (_) {}
+      apply(e.clientX);
+      e.preventDefault();
+    });
+    sl.addEventListener("pointermove", (e) => { if (down) { apply(e.clientX); e.preventDefault(); } });
+    sl.addEventListener("pointerup", (e) => { down = false; try { sl.releasePointerCapture(e.pointerId); } catch (_) {} });
+    sl.addEventListener("pointercancel", () => { down = false; });
   });
 
   // Seat heat L / R toggles (independent).
@@ -1294,14 +1301,21 @@ function wireSeat() {
   if (minus) minus.addEventListener("click", () => setA(seatVals[seatSel] - 2));
   if (plus) plus.addEventListener("click", () => setA(seatVals[seatSel] + 2));
   if (slider) {
+    slider.style.touchAction = "none";
     const fromX = (clientX) => {
       const r = slider.getBoundingClientRect();
       setA(30 + Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * 90);
     };
     let down = false;
-    slider.addEventListener("pointerdown", (e) => { down = true; fromX(e.clientX); });
-    slider.addEventListener("pointermove", (e) => { if (down) fromX(e.clientX); });
-    window.addEventListener("pointerup", () => { down = false; });
+    slider.addEventListener("pointerdown", (e) => {
+      down = true;
+      try { slider.setPointerCapture(e.pointerId); } catch (_) {}
+      fromX(e.clientX);
+      e.preventDefault();
+    });
+    slider.addEventListener("pointermove", (e) => { if (down) { fromX(e.clientX); e.preventDefault(); } });
+    slider.addEventListener("pointerup", (e) => { down = false; try { slider.releasePointerCapture(e.pointerId); } catch (_) {} });
+    slider.addEventListener("pointercancel", () => { down = false; });
   }
   document.querySelectorAll(".seat-tab").forEach((t) =>
     t.addEventListener("click", () => {
