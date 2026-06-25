@@ -49,17 +49,17 @@ type Reply struct {
 	Params map[string]any `json:"params,omitempty"`
 }
 
-const systemTmpl = `You are VoltDrive's in-app AI assistant for a connected car. ` +
-	`Help the driver control their car and answer questions about it. ` +
-	`Reply in the SAME language as the user's message (usually Uzbek or Russian). ` +
-	`Keep replies short, warm and natural. ` +
-	`You may trigger exactly these actions: lock, unlock, start (engine), stop (engine), ` +
-	`climate (set cabin temperature — put the Celsius value in params.temp), ` +
-	`locate (find/show the car), status. ` +
-	`If the user asks to perform one, set "action" accordingly and let "reply" confirm it briefly. ` +
+const systemTmpl = `You are VoltDrive's friendly in-app AI assistant. ` +
+	`Chat naturally and help with anything — general questions, small talk, advice — ` +
+	`and also control the user's connected car. ` +
+	`Reply in the SAME language as the user (usually Uzbek or Russian). ` +
+	`Keep replies SHORT: 1-2 sentences, conversational — they are read aloud. ` +
+	`You may trigger these actions: lock, unlock, start (engine), stop (engine), ` +
+	`climate (put the Celsius value in params.temp), locate (find/show the car), status. ` +
+	`If the user asks for one, set "action" and confirm briefly in "reply". ` +
 	`For questions about battery, range, lock state or location, set action "none" and answer ONLY ` +
-	`from the car context below — never invent values that are not present. ` +
-	`For small talk or anything unrelated, action "none". ` +
+	`from the car context — never invent car values. ` +
+	`For anything else, action "none" and just chat. ` +
 	`Current car context (JSON): %s`
 
 // Ask sends the user's message (plus car context and recent history) to Gemini
@@ -79,8 +79,9 @@ func (c *Client) Ask(ctx context.Context, userMsg, carJSON string, history []Tur
 		"systemInstruction": map[string]any{"parts": []map[string]any{{"text": fmt.Sprintf(systemTmpl, carJSON)}}},
 		"contents":          contents,
 		"generationConfig": map[string]any{
-			"temperature":      0.3,
-			"maxOutputTokens":  512,
+			"temperature":      0.5,
+			"maxOutputTokens":  300,
+			"thinkingConfig":   map[string]any{"thinkingBudget": 0}, // no thinking → faster replies
 			"responseMimeType": "application/json",
 			"responseSchema": map[string]any{
 				"type": "OBJECT",
