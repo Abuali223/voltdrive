@@ -89,7 +89,7 @@
           { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains; preload" },
           { "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" },
           { "key": "Content-Security-Policy", "value": "object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
-          { "key": "Permissions-Policy", "value": "camera=(), microphone=(), payment=(), usb=()" }
+          { "key": "Permissions-Policy", "value": "camera=(), microphone=(self), payment=(), usb=()" }
         ]
       }
     ]
