@@ -852,18 +852,14 @@ func (s *Server) handleDiagnose(w http.ResponseWriter, r *http.Request, user aut
 var errImmobilized = errors.New("immobilized")
 
 // immobilized reports whether the vehicle's anti-theft lockout is engaged.
-// Fails open to "not immobilized" only on store errors (never blocks on a glitch),
-// but the Firestore read is authoritative for the on/off state.
+// Fails CLOSED: on a store error it uses the last cached state, or denies the
+// start outright when the state is unknown — a storage outage must never let a
+// possibly-immobilized car be started.
 func (s *Server) immobilized(ctx context.Context, vid string) bool {
 	if s.Immobilizer == nil {
 		return false
 	}
-	on, err := s.Immobilizer.Get(ctx, vid)
-	if err != nil {
-		log.Printf("immobilizer check %s: %v", vid, err)
-		return false
-	}
-	return on
+	return s.Immobilizer.IsBlocked(ctx, vid)
 }
 
 // handleImmobilizerGet returns the current anti-theft lockout state.
@@ -1533,9 +1529,21 @@ func bearerHeader(r *http.Request) string {
 
 // bearerWS additionally allows ?access_token= (WebSocket clients cannot set
 // the Authorization header).
+// bearerWS extracts the auth token for a WebSocket upgrade. Browsers cannot set
+// the Authorization header on a WebSocket, so the token is passed as a
+// Sec-WebSocket-Protocol subprotocol "jwt.<token>" — which, unlike a query
+// string, is NOT recorded in URL/access logs. A legacy ?access_token= query
+// param is still accepted as a fallback.
 func bearerWS(r *http.Request) string {
 	if t := bearerHeader(r); t != "" {
 		return t
+	}
+	for _, hdr := range r.Header.Values("Sec-WebSocket-Protocol") {
+		for _, p := range strings.Split(hdr, ",") {
+			if p = strings.TrimSpace(p); strings.HasPrefix(p, "jwt.") {
+				return strings.TrimPrefix(p, "jwt.")
+			}
+		}
 	}
 	return r.URL.Query().Get("access_token")
 }

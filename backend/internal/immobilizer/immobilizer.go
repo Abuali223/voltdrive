@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -18,10 +19,36 @@ type Store struct {
 	projectID string
 	token     func(ctx context.Context) (string, error)
 	client    *http.Client
+
+	mu    sync.RWMutex
+	cache map[string]bool // last successfully-read state per vehicle (for fail-closed)
 }
 
 func NewStore(projectID string, token func(context.Context) (string, error)) *Store {
-	return &Store{projectID: projectID, token: token, client: &http.Client{Timeout: 8 * time.Second}}
+	return &Store{projectID: projectID, token: token, client: &http.Client{Timeout: 8 * time.Second}, cache: map[string]bool{}}
+}
+
+// IsBlocked reports whether remote-start must be refused for vid. It fails
+// CLOSED: when the store read errors it returns the last cached state, or true
+// (blocked) if the state was never read — so a Firestore outage can never be
+// used to start a car that might be immobilized. Successful reads (including a
+// non-existent doc → false) populate the cache, so normal vehicles keep working
+// through transient glitches.
+func (s *Store) IsBlocked(ctx context.Context, vid string) bool {
+	on, err := s.Get(ctx, vid)
+	if err == nil {
+		s.mu.Lock()
+		s.cache[vid] = on
+		s.mu.Unlock()
+		return on
+	}
+	s.mu.RLock()
+	cached, ok := s.cache[vid]
+	s.mu.RUnlock()
+	if ok {
+		return cached // last known good state
+	}
+	return true // unknown state under failure → deny the start
 }
 
 func (s *Store) doc(vid string) string {
@@ -87,5 +114,8 @@ func (s *Store) Set(ctx context.Context, vid string, on bool) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("immobilizer set: %s", resp.Status)
 	}
+	s.mu.Lock()
+	s.cache[vid] = on
+	s.mu.Unlock()
 	return nil
 }

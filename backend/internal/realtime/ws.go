@@ -16,7 +16,12 @@ import (
 // patterns, e.g. "eldi-79bf9.web.app"). An empty list allows any origin
 // (development only).
 func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, vehicleID string, originPatterns []string) {
-	opts := &websocket.AcceptOptions{OriginPatterns: originPatterns}
+	opts := &websocket.AcceptOptions{
+		OriginPatterns: originPatterns,
+		// The client offers ["voltdrive.v1", "jwt.<token>"]; negotiate the clean
+		// marker so the handshake response never echoes the token back.
+		Subprotocols: []string{"voltdrive.v1"},
+	}
 	if len(originPatterns) == 0 {
 		opts.InsecureSkipVerify = true // dev: accept any origin
 	}
