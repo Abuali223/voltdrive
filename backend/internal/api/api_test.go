@@ -142,6 +142,13 @@ func TestCORSAllowlist(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://eldi-79bf9.web.app" {
 		t.Fatalf("allow-origin = %q", got)
 	}
+	// PUT and DELETE must be advertised so the browser allows fleet/routines
+	// saves and revoke/remove operations (preflight otherwise blocks them).
+	for _, m := range []string{"PUT", "DELETE"} {
+		if !strings.Contains(rec.Header().Get("Access-Control-Allow-Methods"), m) {
+			t.Fatalf("Allow-Methods missing %s: %q", m, rec.Header().Get("Access-Control-Allow-Methods"))
+		}
+	}
 	// Disallowed origin is not reflected.
 	req2 := httptest.NewRequest("OPTIONS", "/v1/vehicles/voyah-001", nil)
 	req2.Header.Set("Origin", "https://evil.example")
