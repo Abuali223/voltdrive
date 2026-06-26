@@ -638,7 +638,11 @@ function wireControls() {
   App.fleetRemove = fleetRemove;
   App.fleetToggleLock = fleetToggleLock;
   App.fleetFilter = fleetFilter;
+  App.addVehicle = addVehicleLive; // garage: custom model + plate via CAN device
   App.openAdmin = () => { window.location.href = "admin.html"; };
+
+  // Re-attach the user's CAN-added garage vehicles (persisted locally).
+  try { restoreGarageCars(); } catch (_) {}
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
   const origLights = App.toggleLights.bind(App);
@@ -2213,6 +2217,104 @@ function vdModal(innerHTML, maxw) {
 }
 
 function curVid() { return VMAP[window.App?.activeCar?.id] || "voyah-001"; }
+
+// --- Garage: add a vehicle via an aftermarket CAN/OBD device (no OEM API) ---
+// Many cars in the region connect through a CAN module (CANlock-type) rather
+// than the manufacturer cloud. The user enters their own model + plate; we bind
+// it to a free telemetry channel so it locks/unlocks and streams like the rest.
+const GARAGE_VIDS = ["deepal-005", "deepal-006", "deepal-007", "byd-004"]; // free demo channels
+function garageCars() { try { return JSON.parse(localStorage.getItem("vd_garage_cars") || "[]"); } catch (_) { return []; } }
+function garageCarsSet(l) { localStorage.setItem("vd_garage_cars", JSON.stringify(l)); }
+
+function usedGarageVids() {
+  const used = new Set();
+  document.querySelectorAll("#s-garage .gi").forEach((g) => {
+    const v = g.dataset.vid || VMAP[g.dataset.brand];
+    if (v) used.add(v);
+  });
+  return used;
+}
+
+const CAN_CAR_SVG = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FF8A3D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>';
+
+function appendCanCar(c, doSelect) {
+  const addBtn = document.getElementById("garage-add");
+  if (!addBtn) return;
+  if (document.querySelector(`#s-garage .gi[data-cid="${c.id}"]`)) return; // no duplicates
+  VMAP[c.id] = c.vid;
+  const card = document.createElement("div");
+  card.className = "gi";
+  card.dataset.brand = c.id; // selectCar/curVid resolve the channel via VMAP[c.id]
+  card.dataset.vid = c.vid;
+  card.dataset.cid = c.id;
+  card.innerHTML =
+    '<div class="gi-img" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#2a2c31,#15161a);">' + CAN_CAR_SVG + "</div>" +
+    '<div style="flex:1;min-width:0"><div style="color:#fff;font-weight:700;font-size:15px;font-family:\'Sora\';">' + escapeHtml(c.model) + "</div>" +
+    '<div style="color:#9a9ca2;font-size:12px;margin-top:3px;display:flex;gap:7px;align-items:center;">' + (c.plate ? "<span>" + escapeHtml(c.plate) + "</span><span>·</span>" : "") + '<span style="color:#43d684;display:inline-flex;align-items:center;gap:3px;"><i data-lucide="cpu" style="width:12px;height:12px"></i>CAN</span></div></div>' +
+    '<div class="ibtn" style="width:30px;height:30px;flex-shrink:0;" data-rm="' + c.id + '"><i data-lucide="x" style="width:14px;height:14px;color:#ff8a8a"></i></div>';
+  card.addEventListener("click", (e) => {
+    if (e.target.closest("[data-rm]")) { e.stopPropagation(); garageRemove(c.id); return; }
+    App.selectCar(card, c.id, c.model, "", "center 32%", "");
+  });
+  addBtn.parentNode.insertBefore(card, addBtn);
+  if (window.lucide) lucide.createIcons();
+  if (doSelect) App.selectCar(card, c.id, c.model, "", "center 32%", "");
+}
+
+function restoreGarageCars() {
+  garageCars().forEach((c) => appendCanCar(c, false));
+}
+
+function garageRemove(id) {
+  const uz = window.App?.lang === "uz";
+  if (!confirm(uz ? "Bu mashinani o'chirasizmi?" : "Remove this vehicle?")) return;
+  garageCarsSet(garageCars().filter((c) => c.id !== id));
+  const card = document.querySelector(`#s-garage .gi[data-cid="${id}"]`);
+  const wasActive = App.activeCar?.id === id;
+  if (card) card.remove();
+  delete VMAP[id];
+  if (wasActive) {
+    const first = document.querySelector("#s-garage .gi");
+    if (first) first.click();
+  }
+  toast(uz ? "O'chirildi" : "Removed", "ok");
+}
+
+// addVehicleLive replaces the catalog picker with a model + plate form.
+function addVehicleLive() {
+  const uz = window.App?.lang === "uz";
+  const free = GARAGE_VIDS.find((v) => !usedGarageVids().has(v));
+  const o = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">' + (uz ? "Mashina qo'shish" : "Add vehicle") + '</div>' +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:15px;line-height:1.5;">' + (uz ? "CAN/OBD qurilma (CANlock) orqali ulanadi — ishlab chiqaruvchi API si shart emas." : "Connects via a CAN/OBD device — no manufacturer API needed.") + '</div>' +
+    (free ? (
+      '<div style="color:#7e8086;font-size:11px;font-weight:700;margin-bottom:6px;">' + (uz ? "Model" : "Model") + '</div>' +
+      '<input id="gv-model" placeholder="' + (uz ? "Masalan: Chevrolet Cobalt" : "e.g. Chevrolet Cobalt") + '" style="width:100%;height:46px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 14px;font-size:15px;outline:none;font-family:Manrope;box-sizing:border-box;margin-bottom:12px;">' +
+      '<div style="color:#7e8086;font-size:11px;font-weight:700;margin-bottom:6px;">' + (uz ? "Davlat raqami" : "Plate number") + '</div>' +
+      '<input id="gv-plate" placeholder="01 A 123 BC" style="width:100%;height:46px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 14px;font-size:15px;outline:none;font-family:Manrope;box-sizing:border-box;text-transform:uppercase;margin-bottom:16px;">' +
+      '<div id="gv-go" class="obtn" style="height:48px;">' + (uz ? "Ulash" : "Connect") + '</div>'
+    ) : (
+      '<div style="color:#FF8A3D;font-size:13px;text-align:center;padding:8px 0 14px;line-height:1.5;">' + (uz ? "Demo cheklovi: bo'sh telemetriya kanali qolmadi. Bittasini o'chirib, qayta urinib ko'ring." : "Demo limit: no free telemetry channel left. Remove one and try again.") + '</div>'
+    )) +
+    '<div id="gv-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:13px 0 2px;">' + (uz ? "Yopish" : "Close") + '</div>',
+    360);
+  o.box.querySelector("#gv-close").onclick = o.close;
+  if (!free) return;
+  const submit = () => {
+    const model = (o.box.querySelector("#gv-model").value || "").trim();
+    const plate = (o.box.querySelector("#gv-plate").value || "").trim();
+    if (!model) { o.box.querySelector("#gv-model").focus(); return; }
+    const car = { id: "can-" + Date.now().toString(36), model, plate, vid: free };
+    garageCarsSet([...garageCars(), car]);
+    o.close();
+    appendCanCar(car, true);
+    toast(uz ? "Ulandi ✓" : "Connected ✓", "ok");
+    if (window.haptic) haptic([10, 40, 12]);
+  };
+  o.box.querySelector("#gv-go").onclick = submit;
+  o.box.querySelector("#gv-plate").addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  setTimeout(() => o.box.querySelector("#gv-model").focus(), 100);
+}
 
 // --- Panic alarm: flash lights + sound the horn ---
 // --- Subscriptions (Premium) ---
