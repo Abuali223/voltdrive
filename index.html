@@ -94,6 +94,26 @@ body{
 }
 .ni{cursor:pointer;color:#6a6c72;transition:color .15s;}
 .ni.on{color:var(--acc);}
+/* --- Controls hub (Boshqaruv) feature-tile grid --- */
+.cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;}
+.csec{font-family:'Sora';font-size:12px;font-weight:700;color:#7e8086;text-transform:uppercase;
+  letter-spacing:.7px;margin:20px 4px 12px;display:flex;align-items:center;gap:7px;}
+.csec:first-child{margin-top:6px;}
+.ctile{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:9px;
+  background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);border-radius:18px;
+  padding:15px 6px 13px;cursor:pointer;text-align:center;min-height:96px;position:relative;}
+.ctile .ci{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  background:rgba(255,106,26,.12);color:var(--acc);flex-shrink:0;}
+.ctile .ci.red{background:rgba(255,77,77,.14);color:#ff5d5d;}
+.ctile .ci.grn{background:rgba(67,214,132,.13);color:#43d684;}
+.ctile .ci.blu{background:rgba(74,150,232,.14);color:#5aa6f0;}
+.ctile .cl{font-size:11.5px;font-weight:600;color:#dfe1e4;line-height:1.28;}
+.ctile .cbadge{position:absolute;top:8px;right:9px;font-size:9px;font-weight:800;color:var(--acc);}
+/* horizontal swipe hint when sliding between main tabs */
+.screen.swipe-l{animation:swL .26s cubic-bezier(.22,.61,.36,1);}
+.screen.swipe-r{animation:swR .26s cubic-bezier(.22,.61,.36,1);}
+@keyframes swL{from{opacity:.4;transform:translateX(34px);}to{opacity:1;transform:none;}}
+@keyframes swR{from{opacity:.4;transform:translateX(-34px);}to{opacity:1;transform:none;}}
 .ibtn{
   width:40px;height:40px;border-radius:13px;
   background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);
@@ -355,7 +375,7 @@ body{
   </div>
   <div class="bnav">
     <div class="ni on" onclick="App.go('home')"><i data-lucide="layout-grid" style="width:22px;height:22px"></i></div>
-    <div class="ni" onclick="App.go('charge')"><i data-lucide="zap" style="width:22px;height:22px"></i></div>
+    <div class="ni" onclick="App.go('controls')"><i data-lucide="layout-dashboard" style="width:22px;height:22px"></i></div>
     <div class="ni" onclick="App.go('map')"><i data-lucide="map-pin" style="width:22px;height:22px"></i></div>
     <div class="ni" onclick="App.go('profile')"><i data-lucide="user" style="width:22px;height:22px"></i></div>
   </div>
@@ -509,7 +529,7 @@ body{
   </div>
   <div class="bnav">
     <div class="ni" onclick="App.go('home')"><i data-lucide="layout-grid" style="width:22px;height:22px"></i></div>
-    <div class="ni on"><i data-lucide="zap" style="width:22px;height:22px"></i></div>
+    <div class="ni on" onclick="App.go('controls')"><i data-lucide="layout-dashboard" style="width:22px;height:22px"></i></div>
     <div class="ni" onclick="App.go('map')"><i data-lucide="map-pin" style="width:22px;height:22px"></i></div>
     <div class="ni" onclick="App.go('profile')"><i data-lucide="user" style="width:22px;height:22px"></i></div>
   </div>
@@ -582,7 +602,7 @@ body{
     </div>
     <div class="bnav" style="position:relative;background:linear-gradient(to top,rgba(10,11,13,.96) 30%,rgba(10,11,13,0));padding:12px 30px 24px;pointer-events:auto;">
       <div class="ni" onclick="App.go('home')"><i data-lucide="layout-grid" style="width:22px;height:22px"></i></div>
-      <div class="ni" onclick="App.go('charge')"><i data-lucide="zap" style="width:22px;height:22px"></i></div>
+      <div class="ni" onclick="App.go('controls')"><i data-lucide="layout-dashboard" style="width:22px;height:22px"></i></div>
       <div class="ni on"><i data-lucide="map-pin" style="width:22px;height:22px"></i></div>
       <div class="ni" onclick="App.go('profile')"><i data-lucide="user" style="width:22px;height:22px"></i></div>
     </div>
@@ -725,6 +745,58 @@ body{
 </div>
 
 <!-- ===== SCREEN: PROFILE ===== -->
+<!-- ===== SCREEN: CONTROLS HUB (Boshqaruv) ===== -->
+<div class="screen" id="s-controls">
+  <div class="sb"><span class="sb-t time">19:02</span><span class="sb-i"><i data-lucide="signal" style="width:14px;height:14px"></i><i data-lucide="wifi" style="width:14px;height:14px"></i><i data-lucide="battery-medium" style="width:14px;height:14px"></i></span></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 22px 0;flex-shrink:0;">
+    <div style="font-family:'Sora';font-weight:700;font-size:22px;color:#fff;letter-spacing:-.4px;">Boshqaruv</div>
+    <div class="ibtn" onclick="App.go('alerts')"><i data-lucide="bell" style="width:18px;height:18px"></i></div>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:6px 18px 90px;">
+
+    <div class="csec"><i data-lucide="shield" style="width:14px;height:14px"></i>Xavfsizlik</div>
+    <div class="cgrid">
+      <div class="ctile" onclick="App.sos()"><div class="ci red"><i data-lucide="life-buoy" style="width:23px;height:23px"></i></div><div class="cl">SOS</div></div>
+      <div class="ctile" onclick="App.openImmobilizer()"><div class="ci red"><i data-lucide="lock" style="width:22px;height:22px"></i></div><div class="cl">Masofadan bloklash</div></div>
+      <div class="ctile" onclick="App.openGeofence()"><div class="ci"><i data-lucide="map-pin" style="width:22px;height:22px"></i></div><div class="cl">Xavfsiz hudud</div></div>
+      <div class="ctile" onclick="App.openGuestKeys()"><div class="ci"><i data-lucide="key-round" style="width:22px;height:22px"></i></div><div class="cl">Mehmon kalitlari</div></div>
+      <div class="ctile" onclick="App.openTeenMode()"><div class="ci"><i data-lucide="shield-check" style="width:22px;height:22px"></i></div><div class="cl">Yosh haydovchi</div></div>
+      <div class="ctile" onclick="App.panic()"><div class="ci red"><i data-lucide="siren" style="width:22px;height:22px"></i></div><div class="cl">Trevoga</div></div>
+    </div>
+
+    <div class="csec"><i data-lucide="route" style="width:14px;height:14px"></i>Sayohat va energiya</div>
+    <div class="cgrid">
+      <div class="ctile" onclick="App.go('charge')"><div class="ci grn"><i data-lucide="zap" style="width:23px;height:23px"></i></div><div class="cl">Zaryad</div></div>
+      <div class="ctile" onclick="App.parking()"><div class="ci"><i data-lucide="square-parking" style="width:23px;height:23px"></i></div><div class="cl">Turargoh</div></div>
+      <div class="ctile" onclick="App.openTrips()"><div class="ci"><i data-lucide="route" style="width:22px;height:22px"></i></div><div class="cl">Sayohatlar tarixi</div></div>
+      <div class="ctile" onclick="App.openTripPlanner()"><div class="ci blu"><i data-lucide="map" style="width:22px;height:22px"></i></div><div class="cl">AI sayohat rejasi</div></div>
+      <div class="ctile" onclick="App.openInsights()"><div class="ci"><i data-lucide="bar-chart-3" style="width:22px;height:22px"></i></div><div class="cl">Haydash tahlili</div></div>
+      <div class="ctile" onclick="App.shareLocation()"><div class="ci"><i data-lucide="share-2" style="width:22px;height:22px"></i></div><div class="cl">Joylashuvni ulashish</div></div>
+    </div>
+
+    <div class="csec"><i data-lucide="alarm-clock" style="width:14px;height:14px"></i>Avtomatika</div>
+    <div class="cgrid">
+      <div class="ctile" onclick="App.openAutomation()"><div class="ci"><i data-lucide="alarm-clock" style="width:22px;height:22px"></i></div><div class="cl">Avtomatlashtirish</div></div>
+      <div class="ctile" onclick="App.openReminders()"><div class="ci"><i data-lucide="bell" style="width:22px;height:22px"></i></div><div class="cl">Eslatmalar</div><span class="cbadge" id="rem-badge-2"></span></div>
+      <div class="ctile" onclick="App.openSchedule()"><div class="ci"><i data-lucide="timer" style="width:22px;height:22px"></i></div><div class="cl">Jo'nash taymeri</div></div>
+    </div>
+
+    <div class="csec"><i data-lucide="users" style="width:14px;height:14px"></i>Oila va bonus</div>
+    <div class="cgrid">
+      <div class="ctile" onclick="App.go('family')"><div class="ci"><i data-lucide="users" style="width:22px;height:22px"></i></div><div class="cl">Oilaviy boshqaruv</div></div>
+      <div class="ctile" onclick="App.openReferral()"><div class="ci grn"><i data-lucide="gift" style="width:22px;height:22px"></i></div><div class="cl">Do'st taklif qilish</div><span class="cbadge">+1 oy</span></div>
+      <div class="ctile" onclick="App.findCar()"><div class="ci"><i data-lucide="bell-ring" style="width:22px;height:22px"></i></div><div class="cl">Mashinani topish</div></div>
+    </div>
+
+  </div>
+  <div class="bnav">
+    <div class="ni" onclick="App.go('home')"><i data-lucide="layout-grid" style="width:22px;height:22px"></i></div>
+    <div class="ni on"><i data-lucide="layout-dashboard" style="width:22px;height:22px"></i></div>
+    <div class="ni" onclick="App.go('map')"><i data-lucide="map-pin" style="width:22px;height:22px"></i></div>
+    <div class="ni" onclick="App.go('profile')"><i data-lucide="user" style="width:22px;height:22px"></i></div>
+  </div>
+</div>
+
 <div class="screen" id="s-profile">
   <div class="sb"><span class="sb-t time">19:02</span><span class="sb-i"><i data-lucide="signal" style="width:14px;height:14px"></i><i data-lucide="wifi" style="width:14px;height:14px"></i><i data-lucide="battery-medium" style="width:14px;height:14px"></i></span></div>
   <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 22px 0;flex-shrink:0;">
@@ -759,59 +831,9 @@ body{
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.bio">Biometric unlock</div>
         <span id="bio-badge" style="color:var(--acc);font-size:12px;font-weight:600;" data-i18n="profile.bio.off">Off</span>
       </div>
-      <div class="prow" onclick="App.openGuestKeys()">
-        <div class="chip sm neu"><i data-lucide="key-round" style="width:16px;height:16px"></i></div>
-        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.guest">Guest keys</div>
-        <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
-      </div>
-      <div class="prow" onclick="App.openGeofence()">
-        <div class="chip sm neu"><i data-lucide="map-pin" style="width:16px;height:16px"></i></div>
-        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.geofence">Safe zone</div>
-        <span id="geo-badge" style="color:var(--acc);font-size:12px;font-weight:600;" data-i18n="profile.bio.off">Off</span>
-      </div>
-      <div class="prow" onclick="App.openImmobilizer()">
-        <div class="chip sm neu"><i data-lucide="lock" style="width:16px;height:16px"></i></div>
-        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;">Masofadan bloklash</div>
-        <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
-      </div>
-      <div class="prow" onclick="App.go('family')">
-        <div class="chip sm neu"><i data-lucide="users" style="width:16px;height:16px"></i></div>
-        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.family">Family sharing</div>
-        <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
-      </div>
-      <div class="prow" onclick="App.openReminders()">
-        <div class="chip sm neu"><i data-lucide="bell" style="width:16px;height:16px"></i></div>
-        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;">Eslatmalar</div>
-        <span id="rem-badge" style="color:var(--acc);font-size:12px;font-weight:700;"></span>
-      </div>
-      <div class="prow" onclick="App.shareLocation()">
-        <div class="chip sm neu"><i data-lucide="share-2" style="width:16px;height:16px"></i></div>
-        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;">Joylashuvni ulashish</div>
-        <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
-      </div>
-      <div class="prow" onclick="App.openReferral()">
-        <div class="chip sm neu"><i data-lucide="gift" style="width:16px;height:16px"></i></div>
-        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;">Do'st taklif qilish</div>
-        <span style="color:var(--acc);font-size:11px;font-weight:700;">+1 oy</span>
-      </div>
-      <div class="prow" onclick="App.openAutomation()">
-        <div class="chip sm neu"><i data-lucide="alarm-clock" style="width:16px;height:16px"></i></div>
-        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;">Avtomatlashtirish</div>
-        <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
-      </div>
-      <div class="prow" onclick="App.openTrips()">
-        <div class="chip sm neu"><i data-lucide="route" style="width:16px;height:16px"></i></div>
-        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;">Sayohatlar tarixi</div>
-        <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
-      </div>
-      <div class="prow" onclick="App.openTeenMode()">
-        <div class="chip sm neu"><i data-lucide="shield-check" style="width:16px;height:16px"></i></div>
-        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;">Yosh haydovchi rejimi</div>
-        <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
-      </div>
-      <div class="prow" onclick="App.openInsights()">
-        <div class="chip sm neu"><i data-lucide="bar-chart-3" style="width:16px;height:16px"></i></div>
-        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;">Haydash tahlili</div>
+      <div class="prow" onclick="App.go('controls')">
+        <div class="chip sm neu" style="background:linear-gradient(150deg,var(--g1),var(--g2));"><i data-lucide="layout-dashboard" style="width:16px;height:16px;color:#fff"></i></div>
+        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;">Boshqaruv markazi</div>
         <i data-lucide="chevron-right" style="width:17px;height:17px;color:#6a6c72"></i>
       </div>
       <div class="prow" onclick="App.openFleet()">
@@ -843,7 +865,7 @@ body{
   </div>
   <div class="bnav">
     <div class="ni" onclick="App.go('home')"><i data-lucide="layout-grid" style="width:22px;height:22px"></i></div>
-    <div class="ni" onclick="App.go('charge')"><i data-lucide="zap" style="width:22px;height:22px"></i></div>
+    <div class="ni" onclick="App.go('controls')"><i data-lucide="layout-dashboard" style="width:22px;height:22px"></i></div>
     <div class="ni" onclick="App.go('map')"><i data-lucide="map-pin" style="width:22px;height:22px"></i></div>
     <div class="ni on"><i data-lucide="user" style="width:22px;height:22px"></i></div>
   </div>
@@ -1021,7 +1043,7 @@ body{
   </div>
   <div class="bnav">
     <div class="ni" onclick="App.go('home')"><i data-lucide="layout-grid" style="width:22px;height:22px"></i></div>
-    <div class="ni" onclick="App.go('charge')"><i data-lucide="zap" style="width:22px;height:22px"></i></div>
+    <div class="ni" onclick="App.go('controls')"><i data-lucide="layout-dashboard" style="width:22px;height:22px"></i></div>
     <div class="ni" onclick="App.go('map')"><i data-lucide="map-pin" style="width:22px;height:22px"></i></div>
     <div class="ni" onclick="App.go('profile')"><i data-lucide="user" style="width:22px;height:22px"></i></div>
   </div>

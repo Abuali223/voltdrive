@@ -2198,6 +2198,7 @@ function updateScheduleSub(sc) {
 // --- Shared modal shell ---
 function vdModal(innerHTML, maxw) {
   const o = document.createElement("div");
+  o.className = "vd-modal";
   o.style.cssText = "position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.62);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:26px;font-family:'Manrope',system-ui;";
   const box = document.createElement("div");
   box.style.cssText = "width:100%;max-width:" + (maxw || 340) + "px;background:#16171a;border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:20px;animation:scrIn .26s ease;max-height:84vh;overflow:auto;";
@@ -2610,9 +2611,9 @@ function remStore() { try { return JSON.parse(localStorage.getItem("vd_reminders
 function remSet(list) { localStorage.setItem("vd_reminders", JSON.stringify(list)); updateRemBadge(); }
 function daysLeft(date) { return Math.ceil((new Date(date + "T00:00:00").getTime() - Date.now()) / 86400000); }
 function updateRemBadge() {
-  const el = document.getElementById("rem-badge"); if (!el) return;
   const soon = remStore().filter((r) => { const d = daysLeft(r.date); return d >= 0 && d <= 30; }).length;
-  el.textContent = soon ? "⏰ " + soon : "";
+  const txt = soon ? "⏰ " + soon : "";
+  ["rem-badge", "rem-badge-2"].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = txt; });
 }
 function checkRemindersDue() {
   updateRemBadge();
@@ -3843,3 +3844,31 @@ function hideLock() {
   const o = document.getElementById("vd-lock");
   if (o) o.style.display = "none";
 }
+
+// --- Swipe navigation between the four main tabs -----------------------------
+// Horizontal swipe moves to the adjacent primary screen, matching the bottom
+// nav order. The map is excluded as a swipe SOURCE because Leaflet owns touch
+// gestures there (you still swipe INTO it, and tap the nav to leave).
+(function setupSwipeNav() {
+  const TABS = ["home", "controls", "map", "profile"];
+  let x0 = null, y0 = null, t0 = 0;
+  document.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) { x0 = null; return; }
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now();
+  }, { passive: true });
+  document.addEventListener("touchend", (e) => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    const dy = e.changedTouches[0].clientY - y0;
+    x0 = null;
+    const cur = window.App && App.current;
+    const idx = TABS.indexOf(cur);
+    if (idx === -1 || cur === "map") return;                 // only between tabs; map owns its gestures
+    if (Math.abs(dx) < 65 || Math.abs(dx) < Math.abs(dy) * 1.8) return; // clean horizontal swipe only
+    if (Date.now() - t0 > 600) return;                       // ignore slow drags
+    if (e.target.closest && e.target.closest(".leaflet-container, input[type=range], .map-chips, .vd-modal, [data-noswipe]")) return;
+    const ni = idx + (dx < 0 ? 1 : -1);
+    if (ni < 0 || ni >= TABS.length) return;
+    try { App.go(TABS[ni]); haptic && haptic(6); } catch (_) {}
+  }, { passive: true });
+})();
