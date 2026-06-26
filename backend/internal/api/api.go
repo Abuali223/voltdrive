@@ -103,6 +103,7 @@ func (s *Server) Routes() http.Handler {
 	// Push-notification device registration + test (any authenticated user).
 	if s.Devices != nil {
 		mux.HandleFunc("POST /v1/devices", s.guardUser(s.handleDeviceRegister))
+		mux.HandleFunc("POST /v1/sos", s.guardUser(s.handleSOS))
 		if s.FCM != nil {
 			mux.HandleFunc("POST /v1/devices/test", s.guardUser(s.handleDeviceTest))
 		}
@@ -290,6 +291,45 @@ func (s *Server) guardUserT(d time.Duration, next func(http.ResponseWriter, *htt
 		}
 		next(w, r.WithContext(ctx), user)
 	}
+}
+
+// handleSOS pushes an emergency alert with the sender's location to every
+// registered family device. Not premium-gated — safety always works.
+func (s *Server) handleSOS(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if s.FCM == nil || s.Devices == nil {
+		writeErr(w, http.StatusServiceUnavailable, "alerts not configured")
+		return
+	}
+	var req struct {
+		Lat float64 `json:"lat"`
+		Lng float64 `json:"lng"`
+	}
+	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&req)
+	tokens, err := s.Devices.ListTokens(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load devices")
+		return
+	}
+	who := user.Email
+	if who == "" {
+		who = "Foydalanuvchi"
+	}
+	data := map[string]string{"type": "sos", "from": who}
+	body := who + " yordam so'rayapti!"
+	if req.Lat != 0 || req.Lng != 0 {
+		data["loc"] = fmt.Sprintf("https://maps.google.com/?q=%f,%f", req.Lat, req.Lng)
+		body += " Joylashuv biriktirildi."
+	}
+	sent := 0
+	for _, t := range tokens {
+		if _, err := s.FCM.Send(r.Context(), notify.Alert{
+			DeviceToken: t, Title: "🆘 SOS — VoltDrive", Body: body, Data: data,
+		}); err == nil {
+			sent++
+		}
+	}
+	log.Printf("sos from %s -> %d devices", who, sent)
+	writeJSON(w, http.StatusOK, map[string]int{"sent": sent})
 }
 
 func (s *Server) handleDeviceRegister(w http.ResponseWriter, r *http.Request, user auth.User) {

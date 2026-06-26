@@ -596,6 +596,7 @@ function wireControls() {
   App.openGuestEntry = openGuestEntry;
   App.openGeofence = openGeofence;
   App.panic = panic;
+  App.sos = sos;
   // Premium / subscription + Fleet dashboard.
   App.openPremium = openPremium;
   App.openFleet = openFleet;
@@ -2478,6 +2479,41 @@ async function panic() {
     toast(uz ? "Trevoga! Signal va faralar yoqildi" : "Panic! Horn & lights on", "ok");
     haptic([20, 60, 20, 60, 20]);
   } catch (e) { toast((uz ? "Xato: " : "Failed: ") + e.message, "err"); }
+}
+
+// --- SOS: emergency — alert family with location + quick call to services ---
+function sos() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  const m = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:19px;color:#ff5252;margin-bottom:4px;">🆘 ' + (uz ? "Favqulodda holat" : "Emergency") + '</div>' +
+    '<div style="color:#9a9ca2;font-size:13px;margin-bottom:18px;line-height:1.45;">' + (uz ? "Oilangizga joriy joylashuvingiz bilan favqulodda xabar yuboriladi." : "An emergency alert with your live location is sent to your family.") + '</div>' +
+    '<div id="sos-send" class="obtn" style="background:linear-gradient(135deg,#ff5a5a,#e02020);">' + (uz ? "Oilaga SOS yuborish" : "Send SOS to family") + '</div>' +
+    '<a href="tel:103" style="display:flex;align-items:center;justify-content:center;gap:8px;height:50px;border-radius:15px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#fff;font-weight:700;font-size:15px;text-decoration:none;margin-top:10px;">📞 103 — ' + (uz ? "Tez yordam" : "Ambulance") + '</a>' +
+    '<a href="tel:102" style="display:flex;align-items:center;justify-content:center;gap:8px;height:50px;border-radius:15px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#fff;font-weight:700;font-size:15px;text-decoration:none;margin-top:8px;">🚓 102 — ' + (uz ? "Politsiya" : "Police") + '</a>' +
+    '<div id="sos-cancel" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:14px 0 2px;">' + (uz ? "Yopish" : "Close") + '</div>'
+  );
+  m.box.querySelector("#sos-cancel").onclick = m.close;
+  m.box.querySelector("#sos-send").onclick = async () => {
+    const btn = m.box.querySelector("#sos-send");
+    btn.textContent = uz ? "Yuborilmoqda…" : "Sending…";
+    let lat = 0, lng = 0;
+    try {
+      const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 6000 }));
+      lat = pos.coords.latitude; lng = pos.coords.longitude;
+    } catch (_) { if (lastLoc) { lat = lastLoc.lat; lng = lastLoc.lng; } }
+    try {
+      const tk = await auth.currentUser.getIdToken();
+      const r = await fetch(`${CFG.apiBase}/v1/sos`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ lat, lng }) });
+      const d = await r.json().catch(() => ({}));
+      haptic([30, 50, 30, 50, 30]);
+      toast(uz ? `SOS yuborildi (${d.sent || 0} qurilma)` : `SOS sent (${d.sent || 0} devices)`, "ok");
+      m.close();
+    } catch (e) {
+      toast(uz ? "Xatolik — qayta urinib ko'ring" : "Failed — try again", "err");
+      btn.textContent = uz ? "Oilaga SOS yuborish" : "Send SOS to family";
+    }
+  };
 }
 
 // --- Guest keys (owner): create / list / revoke time-limited shared access ---
