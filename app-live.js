@@ -148,6 +148,7 @@ function boot() {
           authStatus(uzNow() ? "Kirildi — PIN..." : "Signed in — PIN...");
           showUser(user);
           aiFab(true);
+          try { checkRemindersDue(); } catch (e) {}
           try { subscribe(); } catch (e) { console.warn("subscribe:", e); }
           refreshSubscription(); // load the user's plan for the profile + gating
           checkAdminAccess();    // show the Admin panel row for admins
@@ -598,6 +599,7 @@ function wireControls() {
   App.panic = panic;
   App.sos = sos;
   App.parking = openParking;
+  App.openReminders = openReminders;
   // Premium / subscription + Fleet dashboard.
   App.openPremium = openPremium;
   App.openFleet = openFleet;
@@ -2553,6 +2555,66 @@ function openParking() {
     haptic(12);
     toast(uz ? "Avtoturargoh saqlandi 🅿️" : "Parking saved 🅿️", "ok");
     o.close(); openParking();
+  };
+}
+
+// --- Reminders: service / insurance / tax dates (local, with due alerts) ---
+function remStore() { try { return JSON.parse(localStorage.getItem("vd_reminders") || "[]"); } catch (_) { return []; } }
+function remSet(list) { localStorage.setItem("vd_reminders", JSON.stringify(list)); updateRemBadge(); }
+function daysLeft(date) { return Math.ceil((new Date(date + "T00:00:00").getTime() - Date.now()) / 86400000); }
+function updateRemBadge() {
+  const el = document.getElementById("rem-badge"); if (!el) return;
+  const soon = remStore().filter((r) => { const d = daysLeft(r.date); return d >= 0 && d <= 30; }).length;
+  el.textContent = soon ? "⏰ " + soon : "";
+}
+function checkRemindersDue() {
+  updateRemBadge();
+  const uz = window.App?.lang === "uz";
+  const due = remStore().map((r) => ({ ...r, d: daysLeft(r.date) })).filter((r) => r.d >= 0 && r.d <= 3).sort((a, b) => a.d - b.d);
+  if (due.length) {
+    const r = due[0];
+    toast("🔔 " + r.title + " — " + (r.d === 0 ? (uz ? "bugun" : "today") : r.d + (uz ? " kun qoldi" : "d left")));
+  }
+}
+function openReminders() {
+  const uz = window.App?.lang === "uz";
+  const render = () => {
+    const list = remStore().slice().sort((a, b) => a.date.localeCompare(b.date));
+    return list.map((r) => {
+      const d = daysLeft(r.date);
+      const col = d < 0 ? "#ff6a6a" : d <= 7 ? "#FF8A3D" : "#43d684";
+      const txt = d < 0 ? (uz ? "o'tdi" : "overdue") : d === 0 ? (uz ? "bugun" : "today") : d + (uz ? " kun" : "d");
+      return '<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:12px;padding:11px 12px;margin-bottom:8px;">' +
+        '<div style="flex:1;min-width:0"><div style="color:#fff;font-weight:600;font-size:14px;">' + escapeHtml(r.title) + '</div><div style="color:#7e8086;font-size:11px;margin-top:2px;">' + escapeHtml(r.date) + '</div></div>' +
+        '<div style="color:' + col + ';font-weight:700;font-size:12px;white-space:nowrap;">' + txt + '</div>' +
+        '<div data-del="' + r.id + '" style="color:#ff6a6a;font-size:18px;cursor:pointer;padding:0 2px;">×</div></div>';
+    }).join("") || '<div style="color:#6a6c72;text-align:center;font-size:13px;padding:14px;">' + (uz ? "Eslatma yo'q" : "No reminders") + '</div>';
+  };
+  const presets = uz ? ["Texnik ko'rik", "Sug'urta", "Soliq", "Moy almashtirish"] : ["Inspection", "Insurance", "Tax", "Oil change"];
+  const inner =
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">🔔 ' + (uz ? "Eslatmalar" : "Reminders") + '</div>' +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:14px;">' + (uz ? "Texnik ko'rik, sug'urta, soliq muddatlari" : "Service, insurance, tax dates") + '</div>' +
+    '<div id="rem-list">' + render() + '</div>' +
+    '<div style="border-top:1px solid rgba(255,255,255,.07);margin:12px 0;padding-top:13px;">' +
+      '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;">' + presets.map((p) => '<span class="rem-p" style="font-size:12px;padding:6px 11px;border-radius:20px;background:rgba(255,138,43,.13);border:1px solid rgba(255,138,43,.3);color:#FF9D5C;cursor:pointer;">' + p + '</span>').join("") + '</div>' +
+      '<input id="rem-title" placeholder="' + (uz ? "Nomi" : "Title") + '" style="width:100%;height:44px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 13px;font-size:14px;outline:none;margin-bottom:9px;font-family:Manrope;">' +
+      '<input id="rem-date" type="date" style="width:100%;height:44px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 13px;font-size:14px;outline:none;margin-bottom:11px;font-family:Manrope;">' +
+      '<div id="rem-add" class="obtn" style="height:46px;">' + (uz ? "Qo'shish" : "Add") + '</div>' +
+    '</div>' +
+    '<div id="rem-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:12px 0 2px;">' + (uz ? "Yopish" : "Close") + '</div>';
+  const o = vdModal(inner, 360);
+  const bindDel = () => o.box.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => { remSet(remStore().filter((x) => x.id != b.getAttribute("data-del"))); o.box.querySelector("#rem-list").innerHTML = render(); bindDel(); });
+  bindDel();
+  o.box.querySelector("#rem-close").onclick = o.close;
+  o.box.querySelectorAll(".rem-p").forEach((p) => p.onclick = () => { o.box.querySelector("#rem-title").value = p.textContent; });
+  o.box.querySelector("#rem-add").onclick = () => {
+    const t = o.box.querySelector("#rem-title").value.trim();
+    const d = o.box.querySelector("#rem-date").value;
+    if (!t || !d) { toast(uz ? "Nomi va sanani kiriting" : "Enter title and date"); return; }
+    const list = remStore(); list.push({ id: Date.now().toString(36), title: t, date: d }); remSet(list);
+    o.box.querySelector("#rem-title").value = ""; o.box.querySelector("#rem-date").value = "";
+    o.box.querySelector("#rem-list").innerHTML = render(); bindDel();
+    toast(uz ? "Qo'shildi ✓" : "Added ✓", "ok");
   };
 }
 
