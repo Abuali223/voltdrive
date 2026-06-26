@@ -637,6 +637,7 @@ function wireControls() {
   App.fleetAdd = fleetAdd;
   App.fleetRemove = fleetRemove;
   App.fleetToggleLock = fleetToggleLock;
+  App.fleetFilter = fleetFilter;
   App.openAdmin = () => { window.location.href = "admin.html"; };
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
@@ -2381,7 +2382,11 @@ async function openFleet() {
   loadFleet();
 }
 
-// Known vehicle pool (display names) the operator can add to their fleet.
+// Master pool of connectable (simulated) vehicles. A real deployment maps each
+// of the operator's cars to its own VIN/account; here every fleet entry binds to
+// one distinct backend id so its lock state is fully independent.
+const ALL_IDS = ["voyah-001", "deepal-002", "deepal-005", "deepal-006", "deepal-007", "dongfeng-003", "byd-004"];
+// Default model suggestion per id (only used to pre-fill the add form).
 const FLEET_POOL = {
   "voyah-001": "Voyah Free",
   "deepal-002": "Deepal S07", "deepal-005": "Deepal SL03",
@@ -2389,6 +2394,14 @@ const FLEET_POOL = {
   "dongfeng-003": "Dongfeng 008", "byd-004": "BYD",
 };
 let fleetState = { name: "My Fleet", slots: 10, vehicleIds: [] };
+let fleetFilterId = "all"; // "all" or a specific vehicle id
+
+// Per-vehicle user labels { id: { model, plate } } kept locally (the backend
+// fleet doc only stores which vehicle ids belong to the fleet).
+function fleetMeta() { try { return JSON.parse(localStorage.getItem("vd_fleet_meta") || "{}"); } catch (_) { return {}; } }
+function fleetMetaSet(m) { localStorage.setItem("vd_fleet_meta", JSON.stringify(m)); }
+function fleetLabel(id) { const m = fleetMeta()[id] || {}; return m.model || FLEET_POOL[id] || id; }
+function fleetPlate(id) { const m = fleetMeta()[id] || {}; return m.plate || ""; }
 
 async function loadFleet() {
   const uz = window.App?.lang === "uz";
@@ -2400,17 +2413,19 @@ async function loadFleet() {
     if (fr.ok) fleetState = await fr.json();
   } catch (e) {}
   if (!fleetState.vehicleIds) fleetState.vehicleIds = [];
+  if (fleetFilterId !== "all" && !fleetState.vehicleIds.includes(fleetFilterId)) fleetFilterId = "all";
 
   const results = await Promise.all(fleetState.vehicleIds.map(async (id) => {
     try {
       const r = await apiAuthFetch(`/v1/vehicles/${id}`);
-      if (r.ok) return { id, name: FLEET_POOL[id] || id, snap: await r.json() };
+      if (r.ok) return { id, snap: await r.json() };
     } catch (e) {}
-    return { id, name: FLEET_POOL[id] || id, snap: null };
+    return { id, snap: null };
   }));
 
+  // Stats reflect the WHOLE fleet; the list below is what the filter narrows.
   let online = 0, lockedN = 0, battSum = 0, battN = 0;
-  const rows = results.map((v) => {
+  const cardData = results.map((v) => {
     const s = v.snap || {};
     const ok = !!v.snap; if (ok) online++;
     const batt = typeof s.batteryPct === "number" ? s.batteryPct : (typeof s.soc === "number" ? s.soc : (typeof s.energy?.batteryLevel === "number" ? s.energy.batteryLevel : null));
@@ -2418,21 +2433,28 @@ async function loadFleet() {
     if (locked) lockedN++;
     if (batt != null) { battSum += batt; battN++; }
     const range = typeof s.rangeKm === "number" ? s.rangeKm : (s.energy?.rangeKm ?? null);
-    const dotC = !ok ? "#5a5c62" : batt != null && batt < 20 ? "#ff5252" : "#43d684";
-    const lockTxt = locked ? (uz ? "Qulflangan" : "Locked") : (uz ? "Ochiq" : "Unlocked");
+    return { id: v.id, ok, batt, locked, range };
+  });
+
+  const shown = cardData.filter((c) => fleetFilterId === "all" || c.id === fleetFilterId);
+  const rows = shown.map((c) => {
+    const dotC = !c.ok ? "#5a5c62" : c.batt != null && c.batt < 20 ? "#ff5252" : "#43d684";
+    const lockTxt = c.locked ? (uz ? "Qulflangan" : "Locked") : (uz ? "Ochiq" : "Unlocked");
+    const plate = fleetPlate(c.id);
     return `<div class="fleet-card">
       <div class="fleet-dot" style="background:${dotC}"></div>
       <div style="flex:1;min-width:0">
-        <div style="color:#fff;font-weight:700;font-size:14px;font-family:'Sora'">${escapeHtml(v.name)}</div>
-        <div style="color:#8a8c92;font-size:12px;margin-top:2px;">${batt != null ? batt + "% · " : ""}${range != null ? range + " km · " : ""}${lockTxt}</div>
+        <div style="color:#fff;font-weight:700;font-size:14px;font-family:'Sora'">${escapeHtml(fleetLabel(c.id))}${plate ? ` <span style="color:#8a8c92;font-weight:600;font-size:12px;">· ${escapeHtml(plate)}</span>` : ""}</div>
+        <div style="color:#8a8c92;font-size:12px;margin-top:2px;">${c.batt != null ? c.batt + "% · " : ""}${c.range != null ? c.range + " km · " : ""}${lockTxt}</div>
       </div>
-      <div class="ibtn" style="width:38px;height:38px;${locked ? "" : "background:rgba(255,106,26,.14);"}" onclick="App.fleetToggleLock('${v.id}', ${locked})" title="${locked ? (uz ? "Ochish" : "Unlock") : (uz ? "Qulflash" : "Lock")}"><i data-lucide="${locked ? "lock" : "lock-open"}" style="width:18px;height:18px;color:${locked ? "#43d684" : "var(--acc)"}"></i></div>
-      <div class="ibtn" style="width:32px;height:32px;" onclick="App.fleetRemove('${v.id}')"><i data-lucide="x" style="width:15px;height:15px;color:#ff8a8a"></i></div>
+      <div class="ibtn" style="width:38px;height:38px;${c.locked ? "" : "background:rgba(255,106,26,.14);"}" onclick="App.fleetToggleLock('${c.id}', ${c.locked})" title="${c.locked ? (uz ? "Ochish" : "Unlock") : (uz ? "Qulflash" : "Lock")}"><i data-lucide="${c.locked ? "lock" : "lock-open"}" style="width:18px;height:18px;color:${c.locked ? "#43d684" : "var(--acc)"}"></i></div>
+      <div class="ibtn" style="width:32px;height:32px;" onclick="App.fleetRemove('${c.id}')"><i data-lucide="x" style="width:15px;height:15px;color:#ff8a8a"></i></div>
     </div>`;
   });
-  list.innerHTML = rows.length ? rows.join("") : `<div style="color:#6a6c72;text-align:center;padding:30px;font-size:13px;">${uz ? "Park bo'sh — mashina qo'shing" : "Empty — add a vehicle"}</div>`;
+  list.innerHTML = rows.length ? rows.join("")
+    : `<div style="color:#6a6c72;text-align:center;padding:30px;font-size:13px;">${fleetState.vehicleIds.length ? (uz ? "Bu filtr bo'yicha mashina yo'q" : "No vehicle for this filter") : (uz ? "Park bo'sh — mashina qo'shing" : "Empty — add a vehicle")}</div>`;
 
-  // Stats tiles.
+  // Stats tiles (whole fleet).
   const avgBatt = battN ? Math.round(battSum / battN) : 0;
   const stat = (v, l) => `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:13px;padding:9px 6px;text-align:center;"><div style="font-family:'Sora';font-weight:800;font-size:17px;color:#fff;">${v}</div><div style="color:#8a8c92;font-size:10px;margin-top:1px;">${l}</div></div>`;
   const stats = document.getElementById("fleet-stats");
@@ -2445,16 +2467,30 @@ async function loadFleet() {
   const sub = document.getElementById("fleet-sub");
   if (sub) { sub.removeAttribute("data-i18n"); sub.textContent = `${results.length}/${fleetState.slots} ${uz ? "joy band" : "slots used"}`; }
 
-  // Populate the "add vehicle" dropdown with pool vehicles not yet in the fleet.
-  const sel = document.getElementById("fleet-add-sel");
+  // Filter dropdown: "All" + each added car (model · plate).
+  const sel = document.getElementById("fleet-filter");
   if (sel) {
-    const avail = Object.keys(FLEET_POOL).filter((id) => !fleetState.vehicleIds.includes(id));
-    sel.innerHTML = avail.length
-      ? avail.map((id) => `<option value="${id}">${FLEET_POOL[id]}</option>`).join("")
-      : `<option value="">${uz ? "Barchasi qo'shilgan" : "All added"}</option>`;
+    const opts = [`<option value="all">${uz ? "Barcha mashinalar" : "All vehicles"}</option>`]
+      .concat(fleetState.vehicleIds.map((id) => {
+        const p = fleetPlate(id);
+        return `<option value="${id}">${escapeHtml(fleetLabel(id))}${p ? " · " + escapeHtml(p) : ""}</option>`;
+      }));
+    sel.innerHTML = opts.join("");
+    sel.value = fleetFilterId;
   }
+
+  // Relabel the bulk buttons so they reflect what they'll act on.
+  const specific = fleetFilterId !== "all";
+  const lockT = document.getElementById("fleet-lockall-t");
+  const unlockT = document.getElementById("fleet-unlockall-t");
+  if (lockT) lockT.textContent = specific ? (uz ? "Tanlanganni qulflash" : "Lock selected") : (uz ? "Hammasini qulflash" : "Lock all");
+  if (unlockT) unlockT.textContent = uz ? "Ochish" : "Unlock";
+
   if (window.lucide) lucide.createIcons();
 }
+
+// fleetFilter narrows the list (and the bulk buttons) to one car or all.
+function fleetFilter(value) { fleetFilterId = value || "all"; loadFleet(); }
 
 async function saveFleet() {
   try {
@@ -2463,23 +2499,46 @@ async function saveFleet() {
   } catch (e) {}
 }
 
+// fleetAdd opens a small form so the operator enters their OWN model + plate.
+// Each new car binds to the next free simulated vehicle id, so two cars of the
+// same model stay independent (locking one never touches the other).
 async function fleetAdd() {
   const uz = window.App?.lang === "uz";
-  const sel = document.getElementById("fleet-add-sel");
-  const id = sel && sel.value;
-  if (!id) return;
-  if ((fleetState.vehicleIds || []).length >= fleetState.slots) {
-    toast(uz ? "Joylar to'lgan — rejani kengaytiring" : "No free slots — upgrade plan", "err");
-    return;
-  }
-  fleetState.vehicleIds = [...(fleetState.vehicleIds || []), id];
-  await saveFleet();
-  toast(uz ? "Qo'shildi ✓" : "Added ✓", "ok");
-  loadFleet();
+  const used = fleetState.vehicleIds || [];
+  const freeId = ALL_IDS.find((id) => !used.includes(id));
+  if (used.length >= (fleetState.slots || 10)) { toast(uz ? "Joylar to'lgan — rejani kengaytiring" : "No free slots — upgrade plan", "err"); return; }
+  if (!freeId) { toast(uz ? "Demo cheklovi: bo'sh ulanish yo'q" : "Demo limit: no free connection", "err"); return; }
+  const o = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">' + (uz ? "Mashina qo'shish" : "Add vehicle") + '</div>' +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:15px;">' + (uz ? "Avtomobil modeli va davlat raqamini kiriting" : "Enter the model and plate number") + '</div>' +
+    '<div style="color:#7e8086;font-size:11px;font-weight:700;margin-bottom:6px;">' + (uz ? "Model" : "Model") + '</div>' +
+    '<input id="fa-model" placeholder="' + (uz ? "Masalan: Deepal S07" : "e.g. Deepal S07") + '" value="' + (FLEET_POOL[freeId] || "") + '" style="width:100%;height:46px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 14px;font-size:15px;outline:none;font-family:Manrope;box-sizing:border-box;margin-bottom:12px;">' +
+    '<div style="color:#7e8086;font-size:11px;font-weight:700;margin-bottom:6px;">' + (uz ? "Davlat raqami" : "Plate number") + '</div>' +
+    '<input id="fa-plate" placeholder="01 A 123 BC" style="width:100%;height:46px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 14px;font-size:15px;outline:none;font-family:Manrope;box-sizing:border-box;text-transform:uppercase;margin-bottom:16px;">' +
+    '<div id="fa-go" class="obtn" style="height:48px;">' + (uz ? "Qo'shish" : "Add") + '</div>' +
+    '<div id="fa-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:13px 0 2px;">' + (uz ? "Bekor qilish" : "Cancel") + '</div>',
+    360);
+  o.box.querySelector("#fa-close").onclick = o.close;
+  const submit = async () => {
+    const model = (o.box.querySelector("#fa-model").value || "").trim();
+    const plate = (o.box.querySelector("#fa-plate").value || "").trim();
+    if (!model) { o.box.querySelector("#fa-model").focus(); return; }
+    const meta = fleetMeta(); meta[freeId] = { model, plate }; fleetMetaSet(meta);
+    fleetState.vehicleIds = [...used, freeId];
+    o.close();
+    await saveFleet();
+    toast(uz ? "Qo'shildi ✓" : "Added ✓", "ok");
+    loadFleet();
+  };
+  o.box.querySelector("#fa-go").onclick = submit;
+  o.box.querySelector("#fa-plate").addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  setTimeout(() => o.box.querySelector("#fa-model").focus(), 100);
 }
 
 async function fleetRemove(id) {
   fleetState.vehicleIds = (fleetState.vehicleIds || []).filter((x) => x !== id);
+  const meta = fleetMeta(); delete meta[id]; fleetMetaSet(meta);
+  if (fleetFilterId === id) fleetFilterId = "all";
   await saveFleet();
   loadFleet();
 }
@@ -2501,14 +2560,22 @@ async function fleetToggleLock(id, locked) {
   loadFleet();
 }
 
+// fleetAll acts on the CURRENT filter: one car when a vehicle is selected in
+// the dropdown, otherwise the whole fleet — so you never lock every car by
+// accident when you only meant one.
 async function fleetAll(action) {
   const uz = window.App?.lang === "uz";
-  const ids = fleetState.vehicleIds || [];
+  const all = fleetState.vehicleIds || [];
+  const ids = fleetFilterId === "all" ? all : all.filter((id) => id === fleetFilterId);
   if (!ids.length) return;
+  const one = ids.length === 1;
   toast(uz ? "Bajarilmoqda…" : "Working…");
   await Promise.all(ids.map((id) => apiAuthFetch(`/v1/vehicles/${id}/${action}`, { method: "POST" }).catch(() => {})));
-  toast(action === "lock" ? (uz ? "Hammasi qulflandi ✓" : "All locked ✓") : (uz ? "Hammasi ochildi ✓" : "All unlocked ✓"), "ok");
-  haptic([10, 30, 10]);
+  const okMsg = action === "lock"
+    ? (one ? (uz ? "Qulflandi ✓" : "Locked ✓") : (uz ? "Hammasi qulflandi ✓" : "All locked ✓"))
+    : (one ? (uz ? "Ochildi ✓" : "Unlocked ✓") : (uz ? "Hammasi ochildi ✓" : "All unlocked ✓"));
+  toast(okMsg, "ok");
+  if (window.haptic) haptic([10, 30, 10]);
   loadFleet();
 }
 
