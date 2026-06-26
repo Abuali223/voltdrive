@@ -894,6 +894,14 @@ body{
         <div class="ibtn" onclick="App.copyCard()" style="width:36px;height:36px;"><i data-lucide="copy" style="width:16px;height:16px"></i></div>
       </div>
       <div id="pay-amount" style="color:var(--acc);font-weight:700;font-size:13px;margin-top:10px;"></div>
+      <div id="pay-gateways" style="display:none;margin-top:14px;">
+        <div style="color:#7e8086;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;">Onlayn to'lov</div>
+        <div style="display:flex;gap:10px;">
+          <div onclick="App.payWith('payme')" style="flex:1;height:48px;border-radius:12px;background:#00cdb9;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;font-weight:800;color:#fff;font-family:'Sora';font-size:15px;">Payme</div>
+          <div onclick="App.payWith('click')" style="flex:1;height:48px;border-radius:12px;background:#0095e8;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;font-weight:800;color:#fff;font-family:'Sora';font-size:15px;">Click</div>
+        </div>
+        <div style="color:#7e8086;font-size:11px;margin-top:9px;line-height:1.5;">To'lovdan so'ng Premium avtomatik faollashadi.</div>
+      </div>
     </div>
   </div>
 </div>

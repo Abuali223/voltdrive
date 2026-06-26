@@ -43,6 +43,7 @@ import (
 	"voltdrive/backend/internal/immobilizer"
 	"voltdrive/backend/internal/members"
 	"voltdrive/backend/internal/notify"
+	"voltdrive/backend/internal/payments"
 	"voltdrive/backend/internal/provider"
 	"voltdrive/backend/internal/provider/brands"
 	"voltdrive/backend/internal/provider/mock"
@@ -132,6 +133,7 @@ func main() {
 	var routinesStore *routines.Store
 	var tripsStore *trips.Store
 	var immoStore *immobilizer.Store
+	var paymentsSvc *payments.Service
 	if projectID != "" {
 		dsToken := gcp.NewTokenSource("https://www.googleapis.com/auth/datastore").Token
 		scheduleStore = schedule.NewStore(projectID, dsToken)
@@ -145,6 +147,35 @@ func main() {
 		routinesStore = routines.NewStore(projectID, dsToken)
 		tripsStore = trips.NewStore(projectID, dsToken)
 		immoStore = immobilizer.NewStore(projectID, dsToken)
+
+		// Payments (Click / Payme). Inert until merchant credentials are set in the
+		// environment; a successful payment activates the user's premium tier.
+		payCfg := payments.Config{
+			PaymeMerchantID: os.Getenv("PAYME_MERCHANT_ID"),
+			PaymeKey:        os.Getenv("PAYME_KEY"),
+			ClickServiceID:  os.Getenv("CLICK_SERVICE_ID"),
+			ClickMerchantID: os.Getenv("CLICK_MERCHANT_ID"),
+			ClickSecretKey:  os.Getenv("CLICK_SECRET_KEY"),
+		}
+		if payCfg.Enabled() {
+			orderStore := payments.NewOrderStore(projectID, dsToken)
+			activate := func(ctx context.Context, uid, email, tier string) error {
+				sub, err := subStore.Get(ctx, uid)
+				if err != nil {
+					return err
+				}
+				now := time.Now()
+				sub.UID, sub.Email = uid, email
+				sub.Plan, sub.Status, sub.Tier = "premium", "active", tier
+				sub.StartedAt = now.Unix()
+				sub.ExpiresAt = now.Add(subscription.TierDuration(tier)).Unix()
+				sub.RequestedTier = ""
+				return subStore.Put(ctx, sub)
+			}
+			paymentsSvc = payments.NewService(payCfg, orderStore, activate)
+			log.Printf("payments: enabled (payme=%v click=%v)", payCfg.PaymeReady(), payCfg.ClickReady())
+		}
+
 		// AI assistant via Gemini on Vertex AI (cloud-platform scope; no API key).
 		assistClient = assistant.NewClient(projectID, os.Getenv("GEMINI_LOCATION"), os.Getenv("GEMINI_MODEL"),
 			gcp.NewTokenSource("https://www.googleapis.com/auth/cloud-platform").Token)
@@ -254,6 +285,7 @@ func main() {
 		Routines:         routinesStore,
 		Trips:            tripsStore,
 		Immobilizer:      immoStore,
+		Payments:         paymentsSvc,
 		FCM:              fcm,
 		AllowedOrigins:   origins,
 		OwnerEmail:       os.Getenv("OWNER_EMAIL"),

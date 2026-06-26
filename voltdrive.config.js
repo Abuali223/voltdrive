@@ -32,11 +32,15 @@ window.VOLTDRIVE_CONFIG = {
     logo: "", // e.g. "https://dealer.example/logo.png" — empty keeps the bolt
   },
 
-  // --- Subscription / billing (temporary manual flow until a gateway) ---
+  // --- Subscription / billing ---
   payment: {
-    // Card the user transfers to; the admin then activates the plan.
+    // Manual fallback: card the user transfers to; the admin then activates.
     card: "8600 1234 5678 9012",
     holder: "VoltDrive LLC",
     prices: { "1m": "39 000", "2m": "69 000", "1y": "349 000" }, // UZS
+    // Set true to show the online Payme/Click buttons. The backend must also
+    // have the matching merchant credentials in its environment for them to
+    // complete; otherwise checkout returns a friendly "not configured" message.
+    online: true,
   },
 };

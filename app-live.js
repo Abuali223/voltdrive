@@ -630,6 +630,7 @@ function wireControls() {
   App.openAssistant = openAssistant;
   App.startTrial = startTrial;
   App.requestTier = requestTier;
+  App.payWith = payWith;
   App.copyCard = copyCard;
   App.loadFleet = loadFleet;
   App.fleetAll = fleetAll;
@@ -2324,8 +2325,30 @@ async function requestTier(tier) {
     document.getElementById("pay-amount").textContent = (uz ? "To'lov: " : "Amount: ") + price + " so'm · " + names[tier];
     const box = document.getElementById("prem-pay");
     box.style.display = "block";
+    _payTier = tier;
+    // Show online-payment buttons only when a gateway is configured.
+    const gw = document.getElementById("pay-gateways");
+    if (gw) gw.style.display = (CFG.payment && CFG.payment.online) ? "block" : "none";
     box.scrollIntoView({ behavior: "smooth", block: "center" });
-    toast(uz ? "So'rov yuborildi — kartaga to'lang" : "Requested — transfer to the card", "ok");
+    toast(uz ? "Tarif tanlandi — to'lov usulini tanlang" : "Tier selected — choose a payment method", "ok");
+  } catch (e) { toast((uz ? "Xato: " : "Failed: ") + e.message, "err"); }
+}
+
+let _payTier = null; // tier chosen in the premium screen, for online checkout
+
+// payWith starts an online checkout (Payme/Click) for the selected tier and
+// redirects to the gateway's hosted-payment page.
+async function payWith(provider) {
+  const uz = window.App?.lang === "uz";
+  if (!_payTier) { toast(uz ? "Avval tarifni tanlang" : "Pick a tier first"); return; }
+  try {
+    const r = await apiAuthFetch("/v1/pay/checkout", { method: "POST", body: JSON.stringify({ tier: _payTier, provider }) });
+    if (r.status === 400) { toast(uz ? "To'lov tizimi hali sozlanmagan" : "Payment gateway not configured yet"); return; }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    if (!d.url) throw new Error("no url");
+    toast(uz ? "To'lov sahifasiga o'tilmoqda…" : "Opening payment page…", "ok");
+    location.href = d.url; // redirect to Payme/Click checkout
   } catch (e) { toast((uz ? "Xato: " : "Failed: ") + e.message, "err"); }
 }
 

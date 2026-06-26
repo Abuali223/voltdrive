@@ -28,6 +28,7 @@ import (
 	"voltdrive/backend/internal/immobilizer"
 	"voltdrive/backend/internal/members"
 	"voltdrive/backend/internal/notify"
+	"voltdrive/backend/internal/payments"
 	"voltdrive/backend/internal/provider"
 	"voltdrive/backend/internal/realtime"
 	"voltdrive/backend/internal/routines"
@@ -59,6 +60,7 @@ type Server struct {
 	Routines         *routines.Store     // optional: time-based automation rules
 	Trips            *trips.Store        // optional: per-vehicle driving history
 	Immobilizer      *immobilizer.Store  // optional: anti-theft engine lockout
+	Payments         *payments.Service   // optional: Click / Payme checkout + webhooks
 	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
 	AllowedOrigins   []string            // CORS allowlist (empty = permissive "*")
 	OwnerEmail       string              // bootstrap fleet owner (full access without a Firestore grant)
@@ -155,6 +157,18 @@ func (s *Server) Routes() http.Handler {
 		mux.HandleFunc("GET /v1/admin/subscriptions", s.guardUser(s.handleAdminSubs))
 		mux.HandleFunc("POST /v1/admin/subscriptions/{uid}/activate", s.guardUser(s.handleAdminActivate))
 		mux.HandleFunc("POST /v1/admin/subscriptions/{uid}/revoke", s.guardUser(s.handleAdminRevoke))
+	}
+
+	// Payments (Click / Payme). Checkout is user-authenticated; the gateway
+	// webhooks are public but verified by each provider's own signature.
+	if s.Payments != nil {
+		mux.HandleFunc("POST /v1/pay/checkout", s.guardUser(s.handleCheckout))
+		if s.Payments.Config().PaymeReady() {
+			mux.HandleFunc("POST /v1/pay/payme", s.Payments.HandlePayme)
+		}
+		if s.Payments.Config().ClickReady() {
+			mux.HandleFunc("POST /v1/pay/click", s.Payments.HandleClick)
+		}
 	}
 
 	// Admin management (super admin only): list / add / remove admins.
@@ -1073,6 +1087,45 @@ func (s *Server) handleSubRequest(w http.ResponseWriter, r *http.Request, user a
 		return
 	}
 	writeJSON(w, http.StatusOK, sub)
+}
+
+// handleCheckout creates a payment order for a tier and returns the gateway's
+// hosted-checkout URL. The user pays there; the gateway webhook activates premium.
+func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request, user auth.User) {
+	var req struct {
+		Tier     string `json:"tier"`
+		Provider string `json:"provider"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if !validTier(req.Tier) {
+		writeErr(w, http.StatusBadRequest, "invalid tier")
+		return
+	}
+	cfg := s.Payments.Config()
+	switch req.Provider {
+	case "payme":
+		if !cfg.PaymeReady() {
+			writeErr(w, http.StatusBadRequest, "payme not configured")
+			return
+		}
+	case "click":
+		if !cfg.ClickReady() {
+			writeErr(w, http.StatusBadRequest, "click not configured")
+			return
+		}
+	default:
+		writeErr(w, http.StatusBadRequest, "unknown provider")
+		return
+	}
+	order, payURL, err := s.Payments.Checkout(r.Context(), user.UID, user.Email, req.Tier, req.Provider)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not create order")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"orderId": order.ID, "amount": order.Amount, "url": payURL})
 }
 
 func (s *Server) handleAdminSubs(w http.ResponseWriter, r *http.Request, user auth.User) {
