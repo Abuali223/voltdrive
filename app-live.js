@@ -616,6 +616,7 @@ function wireControls() {
   App.shareLocation = shareLocation;
   App.openReferral = openReferral;
   App.openAutomation = openAutomation;
+  App.openTrips = openTrips;
   // Premium / subscription + Fleet dashboard.
   App.openPremium = openPremium;
   App.openFleet = openFleet;
@@ -2748,6 +2749,50 @@ async function openAutomation() {
     await save();
     toast(uz ? "Qo'shildi ✓" : "Added ✓", "ok");
   };
+}
+
+// --- Trip history: server-logged drives (distance, energy, route) ---
+async function openTrips() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  const vid = curVid();
+  const o = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">🛣️ ' + (uz ? "Sayohatlar tarixi" : "Trip history") + '</div>' +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:14px;">' + (uz ? "Har bir yurishingiz avtomatik yoziladi" : "Every drive is logged automatically") + '</div>' +
+    '<div id="tr-sum" style="display:none;gap:9px;margin-bottom:13px;"></div>' +
+    '<div id="tr-list"><div style="color:#6a6c72;text-align:center;font-size:13px;padding:18px;">' + (uz ? "Yuklanmoqda…" : "Loading…") + '</div></div>' +
+    '<div id="tr-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:14px 0 2px;">' + (uz ? "Yopish" : "Close") + '</div>',
+    380);
+  o.box.querySelector("#tr-close").onclick = o.close;
+  const fmtDate = (ts) => { const d = new Date(ts * 1000); return d.toLocaleDateString(uz ? "uz" : "en", { day: "numeric", month: "short" }) + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  const dur = (a, b) => { const m = Math.max(0, Math.round((b - a) / 60)); return m >= 60 ? (Math.floor(m / 60) + (uz ? " soat " : "h ") + (m % 60) + (uz ? " daq" : "m")) : (m + (uz ? " daq" : "m")); };
+  let list = [];
+  try {
+    const tk = await auth.currentUser.getIdToken();
+    const r = await fetch(`${CFG.apiBase}/v1/trips?vid=${encodeURIComponent(vid)}`, { headers: { Authorization: `Bearer ${tk}` } });
+    if (r.ok) list = (await r.json()) || [];
+  } catch (_) {}
+  const listEl = o.box.querySelector("#tr-list");
+  if (!list.length) {
+    listEl.innerHTML = '<div style="color:#6a6c72;text-align:center;font-size:13px;padding:20px;line-height:1.5;">' + (uz ? "Hozircha sayohat yo'q.<br>Mashina yurganda bu yerda ko'rinadi." : "No trips yet.<br>They appear here once you drive.") + '</div>';
+    return;
+  }
+  // Summary header (this month).
+  const now = Date.now() / 1000, monthAgo = now - 30 * 86400;
+  const recent = list.filter((t) => t.st >= monthAgo);
+  const totKm = recent.reduce((s, t) => s + (t.d || 0), 0);
+  const totSoc = recent.reduce((s, t) => s + Math.max(0, (t.ss || 0) - (t.es || 0)), 0);
+  const sum = o.box.querySelector("#tr-sum");
+  sum.style.display = "flex";
+  const card = (big, lbl) => '<div style="flex:1;background:rgba(255,255,255,.04);border-radius:13px;padding:12px;text-align:center;"><div style="color:#fff;font-family:\'Sora\';font-weight:800;font-size:20px;">' + big + '</div><div style="color:#7e8086;font-size:11px;margin-top:2px;">' + lbl + '</div></div>';
+  sum.innerHTML = card(totKm + " km", uz ? "30 kunda" : "Last 30d") + card(recent.length, uz ? "sayohat" : "trips") + card(totSoc + "%", uz ? "batareya" : "battery");
+  listEl.innerHTML = list.map((t) => {
+    const soc = Math.max(0, (t.ss || 0) - (t.es || 0));
+    return '<div style="display:flex;align-items:center;gap:11px;background:rgba(255,255,255,.04);border-radius:12px;padding:11px 12px;margin-bottom:8px;">' +
+      '<div style="width:36px;height:36px;border-radius:10px;background:rgba(255,106,26,.14);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">🚗</div>' +
+      '<div style="flex:1;min-width:0"><div style="color:#fff;font-weight:700;font-size:15px;font-family:\'Sora\'">' + (t.d || 0) + ' km <span style="font-weight:500;font-size:12px;color:#7e8086">· ' + dur(t.st, t.et) + '</span></div>' +
+      '<div style="color:#7e8086;font-size:11px;margin-top:2px;">' + fmtDate(t.st) + (soc > 0 ? ' · −' + soc + '%' : '') + '</div></div></div>';
+  }).join("");
 }
 
 // --- Guest keys (owner): create / list / revoke time-limited shared access ---

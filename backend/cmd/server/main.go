@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -32,12 +33,10 @@ import (
 	"voltdrive/backend/internal/api"
 	"voltdrive/backend/internal/assistant"
 	"voltdrive/backend/internal/auth"
-	"voltdrive/backend/internal/voice"
 	"voltdrive/backend/internal/branding"
 	"voltdrive/backend/internal/devices"
 	"voltdrive/backend/internal/diagnostics"
 	"voltdrive/backend/internal/fleet"
-	"voltdrive/backend/internal/routines"
 	"voltdrive/backend/internal/gcp"
 	"voltdrive/backend/internal/geofence"
 	"voltdrive/backend/internal/guestkey"
@@ -47,10 +46,13 @@ import (
 	"voltdrive/backend/internal/provider/brands"
 	"voltdrive/backend/internal/provider/mock"
 	"voltdrive/backend/internal/realtime"
+	"voltdrive/backend/internal/routines"
 	"voltdrive/backend/internal/rtdb"
 	"voltdrive/backend/internal/schedule"
 	"voltdrive/backend/internal/subscription"
+	"voltdrive/backend/internal/trips"
 	"voltdrive/backend/internal/users"
+	"voltdrive/backend/internal/voice"
 )
 
 func main() {
@@ -127,6 +129,7 @@ func main() {
 	var brandStore *branding.Store
 	var assistClient *assistant.Client
 	var routinesStore *routines.Store
+	var tripsStore *trips.Store
 	if projectID != "" {
 		dsToken := gcp.NewTokenSource("https://www.googleapis.com/auth/datastore").Token
 		scheduleStore = schedule.NewStore(projectID, dsToken)
@@ -138,6 +141,7 @@ func main() {
 		fleetStore = fleet.NewStore(projectID, dsToken)
 		brandStore = branding.NewStore(projectID, dsToken)
 		routinesStore = routines.NewStore(projectID, dsToken)
+		tripsStore = trips.NewStore(projectID, dsToken)
 		// AI assistant via Gemini on Vertex AI (cloud-platform scope; no API key).
 		assistClient = assistant.NewClient(projectID, os.Getenv("GEMINI_LOCATION"), os.Getenv("GEMINI_MODEL"),
 			gcp.NewTokenSource("https://www.googleapis.com/auth/cloud-platform").Token)
@@ -200,6 +204,13 @@ func main() {
 		log.Printf("routines: automation watcher enabled")
 	}
 
+	// Trip history: detect drives from telemetry (engine on→off) and log them.
+	if tripsStore != nil {
+		go runTrips(context.Background(), registry, tripsStore,
+			[]string{"voyah-001", "deepal-002", "dongfeng-003", "byd-004"})
+		log.Printf("trips: driving-history watcher enabled")
+	}
+
 	hubCtx, hubCancel := context.WithCancel(context.Background())
 	defer hubCancel()
 	go hub.Run(hubCtx, 2*time.Second)
@@ -238,6 +249,7 @@ func main() {
 		Assistant:        assistClient,
 		Voice:            voice.NewClient(os.Getenv("UZBEKVOICE_API_KEY")),
 		Routines:         routinesStore,
+		Trips:            tripsStore,
 		FCM:              fcm,
 		AllowedOrigins:   origins,
 		OwnerEmail:       os.Getenv("OWNER_EMAIL"),
@@ -384,6 +396,78 @@ func containsInt(a []int, v int) bool {
 		}
 	}
 	return false
+}
+
+// tripState holds the open (in-progress) trip for one vehicle.
+type tripState struct {
+	startTs  int64
+	startOdo int
+	startSoc int
+	startLat float64
+	startLng float64
+}
+
+// runTrips samples each vehicle's telemetry every 60s and records a trip when
+// the engine transitions on→off. Distance comes from the odometer, energy from
+// the battery level. Trips with no movement (odometer unchanged) are dropped.
+func runTrips(ctx context.Context, registry *provider.Registry, store *trips.Store, ids []string) {
+	open := map[string]*tripState{} // vehicle -> in-progress trip
+	t := time.NewTicker(60 * time.Second)
+	defer t.Stop()
+	for {
+		for _, id := range ids {
+			snap, err := registry.For(id).Snapshot(ctx, id)
+			if err != nil {
+				continue
+			}
+			if snap.EngineOn {
+				if open[id] == nil {
+					open[id] = &tripState{
+						startTs:  time.Now().Unix(),
+						startOdo: snap.Health.OdometerKm,
+						startSoc: snap.Energy.BatteryLevel,
+						startLat: snap.Location.Lat,
+						startLng: snap.Location.Lng,
+					}
+				}
+				continue
+			}
+			// Engine off: close any open trip.
+			st := open[id]
+			if st == nil {
+				continue
+			}
+			open[id] = nil
+			dist := snap.Health.OdometerKm - st.startOdo
+			if dist <= 0 {
+				continue // no movement, ignore
+			}
+			tr := trips.Trip{
+				ID:       fmt.Sprintf("%s-%d", id, st.startTs),
+				StartTs:  st.startTs,
+				EndTs:    time.Now().Unix(),
+				StartOdo: st.startOdo,
+				EndOdo:   snap.Health.OdometerKm,
+				DistKm:   dist,
+				StartSoc: st.startSoc,
+				EndSoc:   snap.Energy.BatteryLevel,
+				StartLat: st.startLat,
+				StartLng: st.startLng,
+				EndLat:   snap.Location.Lat,
+				EndLng:   snap.Location.Lng,
+			}
+			if err := store.Add(ctx, id, tr); err != nil {
+				log.Printf("trips: save %s: %v", id, err)
+			} else {
+				log.Printf("trips: logged %s %dkm", id, dist)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 func runScheduler(store *schedule.Store, geo *geofence.Store, registry *provider.Registry, alerter *notify.FCMAlerter) {

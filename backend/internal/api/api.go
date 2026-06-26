@@ -32,6 +32,7 @@ import (
 	"voltdrive/backend/internal/routines"
 	"voltdrive/backend/internal/schedule"
 	"voltdrive/backend/internal/subscription"
+	"voltdrive/backend/internal/trips"
 	"voltdrive/backend/internal/users"
 	"voltdrive/backend/internal/voice"
 )
@@ -55,6 +56,7 @@ type Server struct {
 	Assistant        *assistant.Client   // optional: Gemini-backed AI assistant
 	Voice            *voice.Client       // optional: UzbekVoice STT/TTS proxy
 	Routines         *routines.Store     // optional: time-based automation rules
+	Trips            *trips.Store        // optional: per-vehicle driving history
 	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
 	AllowedOrigins   []string            // CORS allowlist (empty = permissive "*")
 	OwnerEmail       string              // bootstrap fleet owner (full access without a Firestore grant)
@@ -175,6 +177,9 @@ func (s *Server) Routes() http.Handler {
 	if s.Routines != nil {
 		mux.HandleFunc("GET /v1/routines", s.guardUser(s.handleRoutinesGet))
 		mux.HandleFunc("PUT /v1/routines", s.guardUser(s.handleRoutinesPut))
+	}
+	if s.Trips != nil {
+		mux.HandleFunc("GET /v1/trips", s.guardUser(s.handleTripsGet))
 	}
 	if s.Voice != nil && s.Voice.Enabled() {
 		mux.HandleFunc("POST /v1/voice/stt", s.guardUserT(80*time.Second, s.handleVoiceSTT))
@@ -837,6 +842,24 @@ func (s *Server) handleRoutinesPut(w http.ResponseWriter, r *http.Request, user 
 	if err := s.Routines.Put(r.Context(), user.UID, list); err != nil {
 		writeErr(w, http.StatusBadGateway, "could not save routines")
 		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// handleTripsGet returns the driving history for the vehicle in ?vid=.
+func (s *Server) handleTripsGet(w http.ResponseWriter, r *http.Request, user auth.User) {
+	vid := r.URL.Query().Get("vid")
+	if vid == "" {
+		writeErr(w, http.StatusBadRequest, "vid required")
+		return
+	}
+	list, err := s.Trips.Get(r.Context(), vid)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load trips")
+		return
+	}
+	if list == nil {
+		list = []trips.Trip{}
 	}
 	writeJSON(w, http.StatusOK, list)
 }
