@@ -623,6 +623,7 @@ function wireControls() {
   App.openTripPlanner = openTripPlanner;
   App.openTeenMode = openTeenMode;
   App.openInsights = openInsights;
+  App.openImmobilizer = openImmobilizer;
   // Premium / subscription + Fleet dashboard.
   App.openPremium = openPremium;
   App.openFleet = openFleet;
@@ -2754,6 +2755,57 @@ async function openAutomation() {
     o.box.querySelector("#au-list").innerHTML = renderList(); bind();
     await save();
     toast(uz ? "Qo'shildi ✓" : "Added ✓", "ok");
+  };
+}
+
+// --- Remote immobilizer: anti-theft engine lockout (owner only) ---
+async function openImmobilizer() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  const vid = curVid();
+  const o = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">🔒 ' + (uz ? "Masofadan bloklash" : "Remote immobilizer") + '</div>' +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:16px;line-height:1.45;">' + (uz ? "Yoqilganda mashina dvigatelini masofadan ishga tushirib bo'lmaydi. O'g'irlikka qarshi himoya." : "When engaged, the engine cannot be remote-started. Anti-theft protection.") + '</div>' +
+    '<div id="im-state" style="text-align:center;padding:18px;border-radius:16px;margin-bottom:14px;background:rgba(255,255,255,.04);"><div style="color:#9a9ca2;font-size:13px;">' + (uz ? "Yuklanmoqda…" : "Loading…") + '</div></div>' +
+    '<div id="im-toggle" class="obtn" style="height:50px;display:none;"></div>' +
+    '<div id="im-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:14px 0 2px;">' + (uz ? "Yopish" : "Close") + '</div>',
+    360);
+  o.box.querySelector("#im-close").onclick = o.close;
+  const stateEl = o.box.querySelector("#im-state");
+  const btn = o.box.querySelector("#im-toggle");
+  const token = () => auth.currentUser.getIdToken();
+  let on = false;
+  const render = () => {
+    stateEl.innerHTML = on
+      ? '<div style="font-size:34px;margin-bottom:6px;">🛑</div><div style="color:#ff5252;font-weight:800;font-family:\'Sora\';font-size:17px;">' + (uz ? "Bloklangan" : "Immobilized") + '</div><div style="color:#9a9ca2;font-size:12px;margin-top:3px;">' + (uz ? "Dvigatel ishga tushmaydi" : "Engine start is blocked") + '</div>'
+      : '<div style="font-size:34px;margin-bottom:6px;">✅</div><div style="color:#43d684;font-weight:800;font-family:\'Sora\';font-size:17px;">' + (uz ? "Faol" : "Active") + '</div><div style="color:#9a9ca2;font-size:12px;margin-top:3px;">' + (uz ? "Mashina normal ishlaydi" : "Vehicle operates normally") + '</div>';
+    stateEl.style.background = on ? "rgba(255,82,82,.1)" : "rgba(67,214,132,.08)";
+    btn.style.display = "block";
+    btn.textContent = on ? (uz ? "Blokni ochish" : "Release lockout") : (uz ? "Mashinani bloklash" : "Immobilize vehicle");
+    btn.style.background = on ? "linear-gradient(135deg,#43d684,#2fa968)" : "linear-gradient(135deg,#ff5252,#c62828)";
+  };
+  try {
+    const r = await fetch(`${CFG.apiBase}/v1/vehicles/${encodeURIComponent(vid)}/immobilizer`, { headers: { Authorization: `Bearer ${await token()}` } });
+    if (r.ok) { on = !!(await r.json()).on; render(); }
+    else { stateEl.innerHTML = '<div style="color:#ff6a6a;font-size:13px;">' + (uz ? "Holatni o'qib bo'lmadi" : "Could not read state") + '</div>'; }
+  } catch (_) { stateEl.innerHTML = '<div style="color:#ff6a6a;font-size:13px;">' + (uz ? "Xatolik" : "Error") + '</div>'; }
+  btn.onclick = async () => {
+    const next = !on;
+    if (next && !confirm(uz ? "Mashinani bloklaysizmi? Dvigatel masofadan ishga tushmaydi." : "Immobilize the vehicle? Remote start will be blocked.")) return;
+    btn.style.opacity = ".6"; btn.style.pointerEvents = "none";
+    try {
+      const r = await fetch(`${CFG.apiBase}/v1/vehicles/${encodeURIComponent(vid)}/immobilizer`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await token()}` },
+        body: JSON.stringify({ on: next }),
+      });
+      if (r.status === 403) { toast(uz ? "Faqat egasi o'zgartira oladi" : "Owner only"); return; }
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      on = next; render();
+      toast(on ? (uz ? "Mashina bloklandi 🔒" : "Vehicle immobilized 🔒") : (uz ? "Blok ochildi ✓" : "Lockout released ✓"), on ? "err" : "ok");
+      logAlert({ title: uz ? "Masofadan bloklash" : "Immobilizer", body: on ? (uz ? "Mashina bloklandi" : "Vehicle immobilized") : (uz ? "Blok ochildi" : "Lockout released"), type: "moved_while_locked" });
+    } catch (e) {
+      toast(uz ? "Xatolik — qayta urinib ko'ring" : "Error — try again", "err");
+    } finally { btn.style.opacity = "1"; btn.style.pointerEvents = "auto"; }
   };
 }
 

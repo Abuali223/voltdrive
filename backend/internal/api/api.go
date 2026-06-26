@@ -25,6 +25,7 @@ import (
 	"voltdrive/backend/internal/fleet"
 	"voltdrive/backend/internal/geofence"
 	"voltdrive/backend/internal/guestkey"
+	"voltdrive/backend/internal/immobilizer"
 	"voltdrive/backend/internal/members"
 	"voltdrive/backend/internal/notify"
 	"voltdrive/backend/internal/provider"
@@ -57,6 +58,7 @@ type Server struct {
 	Voice            *voice.Client       // optional: UzbekVoice STT/TTS proxy
 	Routines         *routines.Store     // optional: time-based automation rules
 	Trips            *trips.Store        // optional: per-vehicle driving history
+	Immobilizer      *immobilizer.Store  // optional: anti-theft engine lockout
 	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
 	AllowedOrigins   []string            // CORS allowlist (empty = permissive "*")
 	OwnerEmail       string              // bootstrap fleet owner (full access without a Firestore grant)
@@ -96,6 +98,12 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/vehicles/{id}/trunk", s.guard(auth.ActLock, s.handleTrunk))
 	mux.HandleFunc("POST /v1/vehicles/{id}/horn", s.guard(auth.ActStart, s.handleHorn))
 	mux.HandleFunc("POST /v1/vehicles/{id}/seat", s.guard(auth.ActClimate, s.handleSeat))
+
+	// Remote immobilizer (anti-theft): view by any viewer, toggle by owner only.
+	if s.Immobilizer != nil {
+		mux.HandleFunc("GET /v1/vehicles/{id}/immobilizer", s.guard(auth.ActView, s.handleImmobilizerGet))
+		mux.HandleFunc("POST /v1/vehicles/{id}/immobilizer", s.guard(auth.ActManage, s.handleImmobilizerSet))
+	}
 
 	// Family / shared-access management (owner only).
 	if s.Members != nil {
@@ -424,6 +432,11 @@ func (s *Server) cmd(name string) func(http.ResponseWriter, *http.Request, auth.
 		case "unlock":
 			err = p.Unlock(r.Context(), id)
 		case "start":
+			if s.immobilized(r.Context(), id) {
+				audit(r, user, id, name, errImmobilized)
+				writeErr(w, http.StatusConflict, "vehicle is immobilized")
+				return
+			}
 			err = p.RemoteStart(r.Context(), id)
 		case "stop":
 			err = p.RemoteStop(r.Context(), id)
@@ -816,6 +829,53 @@ func (s *Server) handleDiagnose(w http.ResponseWriter, r *http.Request, user aut
 		return
 	}
 	writeJSON(w, http.StatusOK, rep)
+}
+
+// errImmobilized is recorded in the audit log when a start is blocked.
+var errImmobilized = errors.New("immobilized")
+
+// immobilized reports whether the vehicle's anti-theft lockout is engaged.
+// Fails open to "not immobilized" only on store errors (never blocks on a glitch),
+// but the Firestore read is authoritative for the on/off state.
+func (s *Server) immobilized(ctx context.Context, vid string) bool {
+	if s.Immobilizer == nil {
+		return false
+	}
+	on, err := s.Immobilizer.Get(ctx, vid)
+	if err != nil {
+		log.Printf("immobilizer check %s: %v", vid, err)
+		return false
+	}
+	return on
+}
+
+// handleImmobilizerGet returns the current anti-theft lockout state.
+func (s *Server) handleImmobilizerGet(w http.ResponseWriter, r *http.Request, _ auth.User) {
+	id := r.PathValue("id")
+	on, err := s.Immobilizer.Get(r.Context(), id)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not read immobilizer")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"on": on})
+}
+
+// handleImmobilizerSet engages or releases the anti-theft lockout (owner only).
+func (s *Server) handleImmobilizerSet(w http.ResponseWriter, r *http.Request, user auth.User) {
+	id := r.PathValue("id")
+	var req struct {
+		On bool `json:"on"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if err := s.Immobilizer.Set(r.Context(), id, req.On); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not set immobilizer")
+		return
+	}
+	audit(r, user, id, "immobilizer:"+map[bool]string{true: "on", false: "off"}[req.On], nil)
+	writeJSON(w, http.StatusOK, map[string]any{"on": req.On})
 }
 
 // handleTripPlan plans an EV journey (with charging stops) to a destination.
@@ -1333,6 +1393,10 @@ func (s *Server) handleGuestCommand(w http.ResponseWriter, r *http.Request) {
 	case "lock":
 		err = p.Lock(r.Context(), k.VehicleID)
 	case "start":
+		if s.immobilized(r.Context(), k.VehicleID) {
+			writeErr(w, http.StatusConflict, "vehicle is immobilized")
+			return
+		}
 		err = p.RemoteStart(r.Context(), k.VehicleID)
 	default:
 		writeErr(w, http.StatusBadRequest, "unknown action")

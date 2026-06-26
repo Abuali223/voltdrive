@@ -40,6 +40,7 @@ import (
 	"voltdrive/backend/internal/gcp"
 	"voltdrive/backend/internal/geofence"
 	"voltdrive/backend/internal/guestkey"
+	"voltdrive/backend/internal/immobilizer"
 	"voltdrive/backend/internal/members"
 	"voltdrive/backend/internal/notify"
 	"voltdrive/backend/internal/provider"
@@ -130,6 +131,7 @@ func main() {
 	var assistClient *assistant.Client
 	var routinesStore *routines.Store
 	var tripsStore *trips.Store
+	var immoStore *immobilizer.Store
 	if projectID != "" {
 		dsToken := gcp.NewTokenSource("https://www.googleapis.com/auth/datastore").Token
 		scheduleStore = schedule.NewStore(projectID, dsToken)
@@ -142,6 +144,7 @@ func main() {
 		brandStore = branding.NewStore(projectID, dsToken)
 		routinesStore = routines.NewStore(projectID, dsToken)
 		tripsStore = trips.NewStore(projectID, dsToken)
+		immoStore = immobilizer.NewStore(projectID, dsToken)
 		// AI assistant via Gemini on Vertex AI (cloud-platform scope; no API key).
 		assistClient = assistant.NewClient(projectID, os.Getenv("GEMINI_LOCATION"), os.Getenv("GEMINI_MODEL"),
 			gcp.NewTokenSource("https://www.googleapis.com/auth/cloud-platform").Token)
@@ -250,6 +253,7 @@ func main() {
 		Voice:            voice.NewClient(os.Getenv("UZBEKVOICE_API_KEY")),
 		Routines:         routinesStore,
 		Trips:            tripsStore,
+		Immobilizer:      immoStore,
 		FCM:              fcm,
 		AllowedOrigins:   origins,
 		OwnerEmail:       os.Getenv("OWNER_EMAIL"),
