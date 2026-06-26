@@ -161,6 +161,79 @@ func (c *Client) call(ctx context.Context, body map[string]any) (string, error) 
 	return gr.Candidates[0].Content.Parts[0].Text, nil
 }
 
+// TripPlan is a structured EV journey plan with charging stops.
+type TripPlan struct {
+	Feasible   bool         `json:"feasible"`   // reachable on current charge (with stops)
+	Summary    string       `json:"summary"`    // one-line overview
+	DistanceKm int          `json:"distanceKm"` // approx total distance
+	ArrivalSoc int          `json:"arrivalSoc"` // estimated battery % on arrival
+	Stops      []ChargeStop `json:"stops"`      // charging stops along the way (may be empty)
+	Tips       []string     `json:"tips,omitempty"`
+}
+
+// ChargeStop is one recommended charging stop.
+type ChargeStop struct {
+	Name string `json:"name"` // place / city to charge at
+	AtKm int    `json:"atKm"` // approx distance from start
+	Note string `json:"note,omitempty"`
+}
+
+const tripTmpl = `You are VoltDrive's EV trip planner for Uzbekistan. Plan a drive from the car's ` +
+	`current location to the user's destination on the current battery charge. ` +
+	`Reply in %s (default Uzbek). Use realistic Uzbekistan geography, distances and charging locations ` +
+	`(Toshkent, Samarqand, Buxoro, Andijon, etc. and major highways). ` +
+	`Estimate total distance, whether the destination is reachable, and the battery %% on arrival. ` +
+	`If the remaining range is not enough, add charging stops (real cities/areas on the route) so the trip is feasible — ` +
+	`assume the driver recharges to ~80%% at each stop. Add 1-3 short practical tips. ` +
+	`Be concise and realistic; never invent fake station brands. ` +
+	`Car charge context (JSON): %s`
+
+// PlanTrip plans an EV journey to dest given the car's battery context.
+func (c *Client) PlanTrip(ctx context.Context, dest, carJSON, lang string) (TripPlan, error) {
+	if lang == "" {
+		lang = "Uzbek"
+	}
+	body := map[string]any{
+		"systemInstruction": map[string]any{"parts": []map[string]any{{"text": fmt.Sprintf(tripTmpl, lang, carJSON)}}},
+		"contents":          []map[string]any{{"role": "user", "parts": []map[string]any{{"text": "Manzil: " + dest}}}},
+		"generationConfig": map[string]any{
+			"temperature":      0.4,
+			"maxOutputTokens":  700,
+			"thinkingConfig":   map[string]any{"thinkingBudget": 0},
+			"responseMimeType": "application/json",
+			"responseSchema": map[string]any{
+				"type": "OBJECT",
+				"properties": map[string]any{
+					"feasible":   map[string]any{"type": "BOOLEAN"},
+					"summary":    map[string]any{"type": "STRING"},
+					"distanceKm": map[string]any{"type": "INTEGER"},
+					"arrivalSoc": map[string]any{"type": "INTEGER"},
+					"stops": map[string]any{"type": "ARRAY", "items": map[string]any{
+						"type": "OBJECT",
+						"properties": map[string]any{
+							"name": map[string]any{"type": "STRING"},
+							"atKm": map[string]any{"type": "INTEGER"},
+							"note": map[string]any{"type": "STRING"},
+						},
+						"required": []string{"name"},
+					}},
+					"tips": map[string]any{"type": "ARRAY", "items": map[string]any{"type": "STRING"}},
+				},
+				"required": []string{"feasible", "summary"},
+			},
+		},
+	}
+	raw, err := c.call(ctx, body)
+	if err != nil {
+		return TripPlan{}, err
+	}
+	var p TripPlan
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		return TripPlan{Summary: raw}, nil
+	}
+	return p, nil
+}
+
 // DiagReport is a structured car-health assessment.
 type DiagReport struct {
 	Status  string  `json:"status"` // ok | warning | critical

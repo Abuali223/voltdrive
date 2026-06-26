@@ -173,6 +173,7 @@ func (s *Server) Routes() http.Handler {
 	if s.Assistant != nil {
 		mux.HandleFunc("POST /v1/assistant", s.guardUser(s.handleAssistant))
 		mux.HandleFunc("POST /v1/diagnose", s.guardUser(s.handleDiagnose))
+		mux.HandleFunc("POST /v1/tripplan", s.guardUser(s.handleTripPlan))
 	}
 	if s.Routines != nil {
 		mux.HandleFunc("GET /v1/routines", s.guardUser(s.handleRoutinesGet))
@@ -815,6 +816,34 @@ func (s *Server) handleDiagnose(w http.ResponseWriter, r *http.Request, user aut
 		return
 	}
 	writeJSON(w, http.StatusOK, rep)
+}
+
+// handleTripPlan plans an EV journey (with charging stops) to a destination.
+func (s *Server) handleTripPlan(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.premiumEntitled(r.Context(), user) {
+		writeErr(w, http.StatusPaymentRequired, "premium required")
+		return
+	}
+	var req struct {
+		Dest string          `json:"dest"`
+		Car  json.RawMessage `json:"car"`
+		Lang string          `json:"lang"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil || strings.TrimSpace(req.Dest) == "" {
+		writeErr(w, http.StatusBadRequest, "dest required")
+		return
+	}
+	carJSON := "{}"
+	if len(req.Car) > 0 {
+		carJSON = string(req.Car)
+	}
+	plan, err := s.Assistant.PlanTrip(r.Context(), req.Dest, carJSON, req.Lang)
+	if err != nil {
+		log.Printf("tripplan error: %v", err)
+		writeErr(w, http.StatusBadGateway, "trip planner unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, plan)
 }
 
 func (s *Server) handleRoutinesGet(w http.ResponseWriter, r *http.Request, user auth.User) {

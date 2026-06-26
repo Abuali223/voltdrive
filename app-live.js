@@ -617,6 +617,7 @@ function wireControls() {
   App.openReferral = openReferral;
   App.openAutomation = openAutomation;
   App.openTrips = openTrips;
+  App.openTripPlanner = openTripPlanner;
   // Premium / subscription + Fleet dashboard.
   App.openPremium = openPremium;
   App.openFleet = openFleet;
@@ -2793,6 +2794,66 @@ async function openTrips() {
       '<div style="flex:1;min-width:0"><div style="color:#fff;font-weight:700;font-size:15px;font-family:\'Sora\'">' + (t.d || 0) + ' km <span style="font-weight:500;font-size:12px;color:#7e8086">· ' + dur(t.st, t.et) + '</span></div>' +
       '<div style="color:#7e8086;font-size:11px;margin-top:2px;">' + fmtDate(t.st) + (soc > 0 ? ' · −' + soc + '%' : '') + '</div></div></div>';
   }).join("");
+}
+
+// --- AI trip planner: plan an EV journey with charging stops (Gemini) ---
+async function openTripPlanner() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  const o = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">🗺️ ' + (uz ? "AI sayohat rejasi" : "AI trip planner") + '</div>' +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:14px;">' + (uz ? "Manzilni kiriting — zaryad bekatlari bilan reja tuzaman" : "Enter a destination — I'll plan charging stops") + '</div>' +
+    '<input id="tp-dest" placeholder="' + (uz ? "Masalan: Samarqand" : "e.g. Samarqand") + '" style="width:100%;height:46px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 14px;font-size:15px;outline:none;font-family:Manrope;box-sizing:border-box;margin-bottom:11px;">' +
+    '<div id="tp-go" class="obtn" style="height:46px;">' + (uz ? "Reja tuzish" : "Plan trip") + '</div>' +
+    '<div id="tp-out" style="margin-top:14px;"></div>' +
+    '<div id="tp-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:13px 0 2px;">' + (uz ? "Yopish" : "Close") + '</div>',
+    380);
+  o.box.querySelector("#tp-close").onclick = o.close;
+  const out = o.box.querySelector("#tp-out");
+  const inp = o.box.querySelector("#tp-dest");
+  const plan = async () => {
+    const dest = inp.value.trim();
+    if (!dest) { inp.focus(); return; }
+    out.innerHTML = '<div style="color:#9a9ca2;text-align:center;font-size:13px;padding:14px;">' + (uz ? "AI reja tuzmoqda…" : "AI is planning…") + '</div>';
+    try {
+      const tk = await auth.currentUser.getIdToken();
+      const langMap = { uz: "Uzbek", ru: "Russian", en: "English" };
+      const res = await fetch(`${CFG.apiBase}/v1/tripplan`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` },
+        body: JSON.stringify({ dest, car: carContext(), lang: langMap[window.App?.lang] || "Uzbek" }),
+      });
+      if (res.status === 402) { out.innerHTML = '<div style="color:#FF8A3D;text-align:center;font-size:13px;padding:12px;">' + (uz ? "Bu Premium funksiya." : "Premium feature.") + '</div>'; return; }
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const p = await res.json();
+      const okc = p.feasible ? "#43d684" : "#FF8A3D";
+      const icon = p.feasible ? "✅" : "⚠️";
+      let html = '<div style="background:rgba(255,255,255,.04);border-radius:13px;padding:13px;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;"><span style="font-size:16px">' + icon + '</span><b style="color:' + okc + ';font-size:14px;">' + (p.feasible ? (uz ? "Yetib borasiz" : "Reachable") : (uz ? "Zaryad kerak" : "Charging needed")) + '</b></div>';
+      html += '<div style="font-size:13px;color:#e8e9ec;line-height:1.5;">' + escapeHtml(p.summary || "") + '</div>';
+      const meta = [];
+      if (p.distanceKm) meta.push((uz ? "Masofa " : "Distance ") + p.distanceKm + " km");
+      if (typeof p.arrivalSoc === "number" && p.arrivalSoc > 0) meta.push((uz ? "Yetib borganda " : "On arrival ") + p.arrivalSoc + "%");
+      if (meta.length) html += '<div style="color:#7e8086;font-size:11px;margin-top:6px;">' + meta.join(" · ") + '</div>';
+      html += '</div>';
+      if (Array.isArray(p.stops) && p.stops.length) {
+        html += '<div style="color:#7e8086;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:13px 0 7px;">⚡ ' + (uz ? "Zaryad bekatlari" : "Charging stops") + '</div>';
+        html += p.stops.map((s) => '<div style="display:flex;align-items:center;gap:11px;background:rgba(255,138,43,.08);border-radius:11px;padding:10px 12px;margin-bottom:7px;">' +
+          '<div style="width:30px;height:30px;border-radius:8px;background:rgba(255,138,43,.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">⚡</div>' +
+          '<div style="flex:1;min-width:0"><div style="color:#fff;font-weight:700;font-size:14px;">' + escapeHtml(s.name || "") + (s.atKm ? ' <span style="font-weight:500;font-size:11px;color:#7e8086">· ' + s.atKm + ' km</span>' : '') + '</div>' +
+          (s.note ? '<div style="color:#9a9ca2;font-size:11px;margin-top:1px;">' + escapeHtml(s.note) + '</div>' : '') + '</div></div>').join("");
+      }
+      if (Array.isArray(p.tips) && p.tips.length) {
+        html += '<div style="color:#7e8086;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:13px 0 7px;">💡 ' + (uz ? "Maslahatlar" : "Tips") + '</div>';
+        html += p.tips.map((t) => '<div style="color:#c8cace;font-size:12px;line-height:1.5;padding-left:14px;position:relative;margin-bottom:4px;"><span style="position:absolute;left:0;color:#FF8A3D;">•</span>' + escapeHtml(t) + '</div>').join("");
+      }
+      out.innerHTML = html;
+    } catch (e) {
+      out.innerHTML = '<div style="color:#ff6a6a;text-align:center;font-size:13px;padding:12px;">' + (uz ? "Xatolik — qayta urinib ko'ring." : "Error — try again.") + '</div>';
+    }
+  };
+  o.box.querySelector("#tp-go").onclick = plan;
+  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") plan(); });
+  setTimeout(() => inp.focus(), 100);
 }
 
 // --- Guest keys (owner): create / list / revoke time-limited shared access ---
