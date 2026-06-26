@@ -541,6 +541,9 @@ function applyLive(v) {
     updateMapMarker();
   }
 
+  // --- Teen / young-driver mode: speed + curfew monitoring ---
+  try { checkTeenMode(v); } catch (_) {}
+
   // --- Personalize engine greeting with the signed-in user ---
   if (auth?.currentUser) {
     const who = (auth.currentUser.displayName || auth.currentUser.email || "").split("@")[0];
@@ -618,6 +621,7 @@ function wireControls() {
   App.openAutomation = openAutomation;
   App.openTrips = openTrips;
   App.openTripPlanner = openTripPlanner;
+  App.openTeenMode = openTeenMode;
   // Premium / subscription + Fleet dashboard.
   App.openPremium = openPremium;
   App.openFleet = openFleet;
@@ -2749,6 +2753,75 @@ async function openAutomation() {
     o.box.querySelector("#au-list").innerHTML = renderList(); bind();
     await save();
     toast(uz ? "Qo'shildi ✓" : "Added ✓", "ok");
+  };
+}
+
+// --- Teen / young-driver mode: speed limit + curfew safety monitoring ---
+function teenGet() {
+  try { return JSON.parse(localStorage.getItem("vd_teen") || "null") || {}; } catch (_) { return {}; }
+}
+function teenSet(cfg) { localStorage.setItem("vd_teen", JSON.stringify(cfg)); }
+
+let _teenLastAlert = 0; // throttle: at most one alert per minute
+function checkTeenMode(v) {
+  const cfg = teenGet();
+  if (!cfg.on) return;
+  const now = Date.now();
+  if (now - _teenLastAlert < 60000) return;
+  const uz = window.App?.lang === "uz";
+  const loc = (v && v.location) || {};
+  // Speed limit (km/h).
+  if (cfg.speed && typeof loc.speed === "number" && loc.speed > cfg.speed + 2) {
+    _teenLastAlert = now;
+    const msg = (uz ? "Tezlik oshib ketdi: " : "Over speed limit: ") + Math.round(loc.speed) + " km/h";
+    toast("🏎️ " + msg, "err");
+    logAlert({ title: uz ? "Yosh haydovchi rejimi" : "Teen mode", body: msg, type: "moved_while_locked" });
+    return;
+  }
+  // Curfew: engine running during restricted hours.
+  if (cfg.curfewOn && (v && v.engineOn)) {
+    const d = new Date(), cur = d.getHours() * 60 + d.getMinutes();
+    const toMin = (s) => { const p = (s || "0:0").split(":"); return (+p[0]) * 60 + (+p[1]); };
+    const a = toMin(cfg.cStart || "22:00"), b = toMin(cfg.cEnd || "06:00");
+    const inWindow = a <= b ? (cur >= a && cur < b) : (cur >= a || cur < b); // handles overnight
+    if (inWindow) {
+      _teenLastAlert = now;
+      const msg = (uz ? "Komendant soatida haydash (" : "Driving during curfew (") + (cfg.cStart || "22:00") + "–" + (cfg.cEnd || "06:00") + ")";
+      toast("🌙 " + msg, "err");
+      logAlert({ title: uz ? "Yosh haydovchi rejimi" : "Teen mode", body: msg, type: "moved_while_locked" });
+    }
+  }
+}
+
+async function openTeenMode() {
+  const uz = window.App?.lang === "uz";
+  const cfg = teenGet();
+  if (cfg.speed == null) cfg.speed = 100;
+  if (!cfg.cStart) cfg.cStart = "22:00";
+  if (!cfg.cEnd) cfg.cEnd = "06:00";
+  const o = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">👶 ' + (uz ? "Yosh haydovchi rejimi" : "Teen driver mode") + '</div>' +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:16px;line-height:1.45;">' + (uz ? "Tezlik va komendant soati nazorati. Chegaradan oshilsa, ogohlantirish keladi." : "Speed & curfew monitoring with alerts when limits are crossed.") + '</div>' +
+    '<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:12px;padding:13px;margin-bottom:12px;"><div style="flex:1;color:#fff;font-weight:700;font-size:15px;">' + (uz ? "Rejim yoqilgan" : "Mode enabled") + '</div><div id="tm-on" style="width:46px;height:26px;border-radius:13px;background:' + (cfg.on ? "#FF6A1A" : "rgba(255,255,255,.15)") + ';position:relative;cursor:pointer;flex-shrink:0;"><div style="width:22px;height:22px;border-radius:50%;background:#fff;position:absolute;top:2px;left:' + (cfg.on ? "22px" : "2px") + ';transition:.2s;"></div></div></div>' +
+    '<div style="background:rgba(255,255,255,.04);border-radius:12px;padding:13px;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;margin-bottom:9px;"><span style="color:#fff;font-weight:700;font-size:14px;">' + (uz ? "Tezlik chegarasi" : "Speed limit") + '</span><span id="tm-spv" style="color:#FF9D5C;font-weight:800;font-family:\'Sora\'">' + cfg.speed + ' km/h</span></div>' +
+    '<input id="tm-sp" type="range" min="40" max="160" step="10" value="' + cfg.speed + '" style="width:100%;accent-color:#FF6A1A;"></div>' +
+    '<div style="background:rgba(255,255,255,.04);border-radius:12px;padding:13px;margin-bottom:14px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:11px;"><div style="flex:1;color:#fff;font-weight:700;font-size:14px;">' + (uz ? "Komendant soati" : "Curfew hours") + '</div><div id="tm-cf" style="width:42px;height:24px;border-radius:12px;background:' + (cfg.curfewOn ? "#FF6A1A" : "rgba(255,255,255,.15)") + ';position:relative;cursor:pointer;flex-shrink:0;"><div style="width:20px;height:20px;border-radius:50%;background:#fff;position:absolute;top:2px;left:' + (cfg.curfewOn ? "20px" : "2px") + ';transition:.2s;"></div></div></div>' +
+    '<div style="display:flex;align-items:center;gap:9px;"><input id="tm-cs" type="time" value="' + cfg.cStart + '" style="flex:1;height:42px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 12px;font-size:14px;outline:none;"><span style="color:#7e8086;">—</span><input id="tm-ce" type="time" value="' + cfg.cEnd + '" style="flex:1;height:42px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 12px;font-size:14px;outline:none;"></div></div>' +
+    '<div id="tm-save" class="obtn" style="height:46px;">' + (uz ? "Saqlash" : "Save") + '</div>' +
+    '<div id="tm-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:13px 0 2px;">' + (uz ? "Yopish" : "Close") + '</div>',
+    380);
+  let on = !!cfg.on, curfewOn = !!cfg.curfewOn;
+  const tmOn = o.box.querySelector("#tm-on"), tmCf = o.box.querySelector("#tm-cf");
+  const paint = (el, val, w) => { el.style.background = val ? "#FF6A1A" : "rgba(255,255,255,.15)"; el.firstElementChild.style.left = val ? (w + "px") : "2px"; };
+  tmOn.onclick = () => { on = !on; paint(tmOn, on, 22); };
+  tmCf.onclick = () => { curfewOn = !curfewOn; paint(tmCf, curfewOn, 20); };
+  const sp = o.box.querySelector("#tm-sp"), spv = o.box.querySelector("#tm-spv");
+  sp.oninput = () => { spv.textContent = sp.value + " km/h"; };
+  o.box.querySelector("#tm-close").onclick = o.close;
+  o.box.querySelector("#tm-save").onclick = () => {
+    teenSet({ on, speed: +sp.value, curfewOn, cStart: o.box.querySelector("#tm-cs").value || "22:00", cEnd: o.box.querySelector("#tm-ce").value || "06:00" });
+    toast(uz ? "Saqlandi ✓" : "Saved ✓", "ok");
+    o.close();
   };
 }
 
