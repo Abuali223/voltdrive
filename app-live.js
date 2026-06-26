@@ -149,6 +149,19 @@ function boot() {
           showUser(user);
           aiFab(true);
           try { checkRemindersDue(); } catch (e) {}
+          // Home-screen shortcut actions (PWA manifest shortcuts).
+          try {
+            const act = new URLSearchParams(location.search).get("action");
+            if (act) {
+              setTimeout(() => {
+                if (act === "lock") sendCommand("lock", null);
+                else if (act === "unlock") sendCommand("unlock", null);
+                else if (act === "ai") openAssistant();
+                else if (act === "sos") sos();
+                history.replaceState(null, "", location.pathname);
+              }, 900);
+            }
+          } catch (e) {}
           try { subscribe(); } catch (e) { console.warn("subscribe:", e); }
           refreshSubscription(); // load the user's plan for the profile + gating
           checkAdminAccess();    // show the Admin panel row for admins

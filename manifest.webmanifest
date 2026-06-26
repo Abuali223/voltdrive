@@ -30,5 +30,11 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "shortcuts": [
+    { "name": "Qulflash", "short_name": "Qulflash", "url": "/index.html?action=lock", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Ochish", "short_name": "Ochish", "url": "/index.html?action=unlock", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "AI yordamchi", "short_name": "AI", "url": "/index.html?action=ai", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "SOS", "short_name": "SOS", "url": "/index.html?action=sos", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }
