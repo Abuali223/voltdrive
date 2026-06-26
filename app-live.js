@@ -600,6 +600,8 @@ function wireControls() {
   App.sos = sos;
   App.parking = openParking;
   App.openReminders = openReminders;
+  App.shareLocation = shareLocation;
+  App.openReferral = openReferral;
   // Premium / subscription + Fleet dashboard.
   App.openPremium = openPremium;
   App.openFleet = openFleet;
@@ -2616,6 +2618,53 @@ function openReminders() {
     o.box.querySelector("#rem-list").innerHTML = render(); bindDel();
     toast(uz ? "Qo'shildi ✓" : "Added ✓", "ok");
   };
+}
+
+// --- Share my live location + ETA (Web Share / clipboard) ---
+async function shareLocation() {
+  const uz = window.App?.lang === "uz";
+  let lat = 0, lng = 0;
+  try {
+    const p = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 6000 }));
+    lat = p.coords.latitude; lng = p.coords.longitude;
+  } catch (_) {
+    if (deviceLoc) { lat = deviceLoc.lat; lng = deviceLoc.lng; }
+    else if (lastLoc) { lat = lastLoc.lat; lng = lastLoc.lng; }
+  }
+  if (!lat && !lng) { toast(uz ? "Joylashuv aniqlanmadi" : "No location"); return; }
+  const link = "https://maps.google.com/?q=" + lat + "," + lng;
+  let txt = (uz ? "Mening joylashuvim: " : "My location: ") + link;
+  const eta = document.getElementById("map-eta");
+  if (destPoint && eta && eta.textContent && eta.textContent.indexOf("km") >= 0) {
+    txt = (uz ? "Yo'ldaman — " : "On my way — ") + eta.textContent.trim() + "\n" + link;
+  }
+  try {
+    if (navigator.share) await navigator.share({ title: "VoltDrive", text: txt });
+    else { await navigator.clipboard.writeText(txt); toast(uz ? "Nusxalandi" : "Copied", "ok"); }
+  } catch (_) {}
+}
+
+// --- Refer a friend: shareable code + invite link ---
+function openReferral() {
+  const uz = window.App?.lang === "uz";
+  let code = localStorage.getItem("vd_ref");
+  if (!code) {
+    code = "VD" + ((auth && auth.currentUser && auth.currentUser.uid) || Date.now().toString(36)).slice(-6).toUpperCase();
+    localStorage.setItem("vd_ref", code);
+  }
+  const link = "https://eldi-79bf9.web.app/?ref=" + code;
+  const msg = (uz ? "VoltDrive — mashinangizni telefondan boshqaring! Mening kodim bilan qo'shiling: " : "VoltDrive — control your car from your phone! Join with my code: ") + code + " " + link;
+  const inner =
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">🎁 ' + (uz ? "Do'st taklif qiling" : "Refer a friend") + '</div>' +
+    '<div style="color:#9a9ca2;font-size:13px;margin-bottom:16px;line-height:1.45;">' + (uz ? "Do'stingiz qo'shilsa — ikkalangizga 1 oy Premium bonus." : "When your friend joins, you both get 1 month Premium.") + '</div>' +
+    '<div style="background:rgba(255,138,43,.12);border:1px dashed rgba(255,138,43,.4);border-radius:14px;padding:16px;text-align:center;margin-bottom:14px;"><div style="color:#9a9ca2;font-size:11px;">' + (uz ? "Sizning kodingiz" : "Your code") + '</div><div style="font-family:\'Sora\';font-weight:800;font-size:26px;color:#FF9D5C;letter-spacing:2px;margin-top:4px;">' + code + '</div></div>' +
+    '<div id="ref-share" class="obtn">' + (uz ? "Ulashish" : "Share") + '</div>' +
+    '<div id="ref-copy" style="height:46px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-top:9px;">' + (uz ? "Kodni nusxalash" : "Copy code") + '</div>' +
+    '<div id="ref-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:12px 0 2px;">' + (uz ? "Yopish" : "Close") + '</div>';
+  const o = vdModal(inner);
+  o.box.querySelector("#ref-close").onclick = o.close;
+  o.box.querySelector("#ref-share").onclick = async () => { try { if (navigator.share) await navigator.share({ title: "VoltDrive", text: msg }); else { await navigator.clipboard.writeText(msg); toast(uz ? "Nusxalandi" : "Copied", "ok"); } } catch (_) {} };
+  o.box.querySelector("#ref-copy").onclick = async () => { try { await navigator.clipboard.writeText(code); toast(uz ? "Kod nusxalandi" : "Code copied", "ok"); } catch (_) {} };
 }
 
 // --- Guest keys (owner): create / list / revoke time-limited shared access ---
