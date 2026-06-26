@@ -3038,7 +3038,7 @@ async function openInsights() {
   let list = [];
   try {
     const tk = await auth.currentUser.getIdToken();
-    const r = await fetch(`${CFG.apiBase}/v1/trips?vid=${encodeURIComponent(vid)}`, { headers: { Authorization: `Bearer ${tk}` } });
+    const r = await fetch(`${CFG.apiBase}/v1/vehicles/${encodeURIComponent(vid)}/trips`, { headers: { Authorization: `Bearer ${tk}` } });
     if (r.ok) list = (await r.json()) || [];
   } catch (_) {}
   if (!list.length) {
@@ -3175,7 +3175,7 @@ async function openTrips() {
   let list = [];
   try {
     const tk = await auth.currentUser.getIdToken();
-    const r = await fetch(`${CFG.apiBase}/v1/trips?vid=${encodeURIComponent(vid)}`, { headers: { Authorization: `Bearer ${tk}` } });
+    const r = await fetch(`${CFG.apiBase}/v1/vehicles/${encodeURIComponent(vid)}/trips`, { headers: { Authorization: `Bearer ${tk}` } });
     if (r.ok) list = (await r.json()) || [];
   } catch (_) {}
   const listEl = o.box.querySelector("#tr-list");

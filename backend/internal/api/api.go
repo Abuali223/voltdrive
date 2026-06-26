@@ -202,7 +202,10 @@ func (s *Server) Routes() http.Handler {
 		mux.HandleFunc("PUT /v1/routines", s.guardUser(s.handleRoutinesPut))
 	}
 	if s.Trips != nil {
-		mux.HandleFunc("GET /v1/trips", s.guardUser(s.handleTripsGet))
+		// Vehicle-scoped: the guard authorizes the caller for {id} before any
+		// trip data (including GPS) is returned — prevents reading other users'
+		// vehicles by id.
+		mux.HandleFunc("GET /v1/vehicles/{id}/trips", s.guard(auth.ActView, s.handleTripsGet))
 	}
 	if s.Voice != nil && s.Voice.Enabled() {
 		mux.HandleFunc("POST /v1/voice/stt", s.guardUserT(80*time.Second, s.handleVoiceSTT))
@@ -949,11 +952,13 @@ func (s *Server) handleRoutinesPut(w http.ResponseWriter, r *http.Request, user 
 	writeJSON(w, http.StatusOK, list)
 }
 
-// handleTripsGet returns the driving history for the vehicle in ?vid=.
+// handleTripsGet returns the driving history for {id}. The vehicle-scoped guard
+// (auth.ActView) has already authorized the caller for this vehicle, so a user
+// can only read trips (incl. GPS) for cars they actually have access to.
 func (s *Server) handleTripsGet(w http.ResponseWriter, r *http.Request, user auth.User) {
-	vid := r.URL.Query().Get("vid")
+	vid := r.PathValue("id")
 	if vid == "" {
-		writeErr(w, http.StatusBadRequest, "vid required")
+		writeErr(w, http.StatusBadRequest, "vehicle id required")
 		return
 	}
 	list, err := s.Trips.Get(r.Context(), vid)
