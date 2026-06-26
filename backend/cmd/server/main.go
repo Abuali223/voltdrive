@@ -47,6 +47,7 @@ import (
 	"voltdrive/backend/internal/provider"
 	"voltdrive/backend/internal/provider/brands"
 	"voltdrive/backend/internal/provider/mock"
+	"voltdrive/backend/internal/provider/starline"
 	"voltdrive/backend/internal/realtime"
 	"voltdrive/backend/internal/routines"
 	"voltdrive/backend/internal/rtdb"
@@ -90,6 +91,25 @@ func main() {
 		}
 	}
 	log.Printf("brands wired: %v", brands.Supported())
+
+	// Real StarLine-connected vehicles (live cloud). Inert until credentials are
+	// set; each STARLINE_DEVICES id is bound so the app controls the real car.
+	slCfg := starline.Config{
+		AppID:     os.Getenv("STARLINE_APP_ID"),
+		AppSecret: os.Getenv("STARLINE_APP_SECRET"),
+		Login:     os.Getenv("STARLINE_LOGIN"),
+		Password:  os.Getenv("STARLINE_PASSWORD"),
+	}
+	if slCfg.Ready() {
+		sl := starline.New(slCfg)
+		for _, id := range strings.Split(os.Getenv("STARLINE_DEVICES"), ",") {
+			if id = strings.TrimSpace(id); id != "" {
+				registry.Bind(id, sl)
+				mirrorIDs = append(mirrorIDs, id)
+				log.Printf("starline: bound live device %s", id)
+			}
+		}
+	}
 
 	// --- Auth: real Firebase if configured, dev otherwise ---
 	var verifier auth.Verifier = auth.DevVerifier{}
