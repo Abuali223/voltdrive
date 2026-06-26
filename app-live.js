@@ -597,6 +597,7 @@ function wireControls() {
   App.openGeofence = openGeofence;
   App.panic = panic;
   App.sos = sos;
+  App.parking = openParking;
   // Premium / subscription + Fleet dashboard.
   App.openPremium = openPremium;
   App.openFleet = openFleet;
@@ -2513,6 +2514,45 @@ function sos() {
       toast(uz ? "Xatolik — qayta urinib ko'ring" : "Failed — try again", "err");
       btn.textContent = uz ? "Oilaga SOS yuborish" : "Send SOS to family";
     }
+  };
+}
+
+// --- Parking memory: remember where the car was parked (local, no backend) ---
+function openParking() {
+  const uz = window.App?.lang === "uz";
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem("vd_parking") || "null"); } catch (_) {}
+  let inner = '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">🅿️ ' + (uz ? "Avtoturargoh" : "Parking") + '</div>';
+  if (saved && saved.lat) {
+    const ago = Math.round((Date.now() - saved.t) / 60000);
+    const agoTxt = ago < 1 ? (uz ? "hozir" : "just now") : (ago < 60 ? ago + (uz ? " daqiqa oldin" : "m ago") : Math.round(ago / 60) + (uz ? " soat oldin" : "h ago"));
+    inner += '<div style="color:#9a9ca2;font-size:13px;margin:6px 0 16px;">' + (uz ? "Saqlangan: " : "Saved ") + agoTxt + '</div>' +
+      '<a href="https://www.google.com/maps/dir/?api=1&destination=' + saved.lat + ',' + saved.lng + '&travelmode=walking" target="_blank" rel="noopener" class="obtn" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">🚶 ' + (uz ? "Mashinaga yo'l" : "Walk to car") + '</a>' +
+      '<div id="pk-save" style="height:48px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-top:10px;">' + (uz ? "Joyni yangilash" : "Update spot") + '</div>' +
+      '<div id="pk-clear" style="text-align:center;color:#ff7a7a;font-weight:700;font-size:13px;cursor:pointer;padding:12px 0 2px;">' + (uz ? "O'chirish" : "Clear") + '</div>';
+  } else {
+    inner += '<div style="color:#9a9ca2;font-size:13px;margin:6px 0 16px;line-height:1.45;">' + (uz ? "Mashinani qoldirgan joyingizni saqlang — keyin piyoda oson topasiz." : "Save where you parked — walk back to it easily.") + '</div>' +
+      '<div id="pk-save" class="obtn">' + (uz ? "Joriy joyni saqlash" : "Save current spot") + '</div>';
+  }
+  inner += '<div id="pk-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:12px 0 2px;">' + (uz ? "Yopish" : "Close") + '</div>';
+  const o = vdModal(inner);
+  o.box.querySelector("#pk-close").onclick = o.close;
+  const cl = o.box.querySelector("#pk-clear");
+  if (cl) cl.onclick = () => { localStorage.removeItem("vd_parking"); o.close(); toast(uz ? "O'chirildi" : "Cleared"); };
+  o.box.querySelector("#pk-save").onclick = async () => {
+    let lat = 0, lng = 0;
+    try {
+      const p = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 6000 }));
+      lat = p.coords.latitude; lng = p.coords.longitude;
+    } catch (_) {
+      if (deviceLoc) { lat = deviceLoc.lat; lng = deviceLoc.lng; }
+      else if (lastLoc) { lat = lastLoc.lat; lng = lastLoc.lng; }
+    }
+    if (!lat && !lng) { toast(uz ? "Joylashuv aniqlanmadi" : "No location"); return; }
+    localStorage.setItem("vd_parking", JSON.stringify({ lat, lng, t: Date.now() }));
+    haptic(12);
+    toast(uz ? "Avtoturargoh saqlandi 🅿️" : "Parking saved 🅿️", "ok");
+    o.close(); openParking();
   };
 }
 
