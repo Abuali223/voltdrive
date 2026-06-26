@@ -636,6 +636,7 @@ function wireControls() {
   App.fleetAll = fleetAll;
   App.fleetAdd = fleetAdd;
   App.fleetRemove = fleetRemove;
+  App.fleetToggleLock = fleetToggleLock;
   App.openAdmin = () => { window.location.href = "admin.html"; };
 
   // Lights: local flip (toggles .lkd), then backend with the new state.
@@ -2382,7 +2383,9 @@ async function openFleet() {
 
 // Known vehicle pool (display names) the operator can add to their fleet.
 const FLEET_POOL = {
-  "voyah-001": "Voyah Free", "deepal-002": "Deepal S07",
+  "voyah-001": "Voyah Free",
+  "deepal-002": "Deepal S07", "deepal-005": "Deepal SL03",
+  "deepal-006": "Deepal S05", "deepal-007": "Deepal S09",
   "dongfeng-003": "Dongfeng 008", "byd-004": "BYD",
 };
 let fleetState = { name: "My Fleet", slots: 10, vehicleIds: [] };
@@ -2423,7 +2426,7 @@ async function loadFleet() {
         <div style="color:#fff;font-weight:700;font-size:14px;font-family:'Sora'">${escapeHtml(v.name)}</div>
         <div style="color:#8a8c92;font-size:12px;margin-top:2px;">${batt != null ? batt + "% · " : ""}${range != null ? range + " km · " : ""}${lockTxt}</div>
       </div>
-      <i data-lucide="${locked ? "lock" : "lock-open"}" style="width:17px;height:17px;color:${locked ? "#43d684" : "var(--acc)"}"></i>
+      <div class="ibtn" style="width:38px;height:38px;${locked ? "" : "background:rgba(255,106,26,.14);"}" onclick="App.fleetToggleLock('${v.id}', ${locked})" title="${locked ? (uz ? "Ochish" : "Unlock") : (uz ? "Qulflash" : "Lock")}"><i data-lucide="${locked ? "lock" : "lock-open"}" style="width:18px;height:18px;color:${locked ? "#43d684" : "var(--acc)"}"></i></div>
       <div class="ibtn" style="width:32px;height:32px;" onclick="App.fleetRemove('${v.id}')"><i data-lucide="x" style="width:15px;height:15px;color:#ff8a8a"></i></div>
     </div>`;
   });
@@ -2478,6 +2481,23 @@ async function fleetAdd() {
 async function fleetRemove(id) {
   fleetState.vehicleIds = (fleetState.vehicleIds || []).filter((x) => x !== id);
   await saveFleet();
+  loadFleet();
+}
+
+// fleetToggleLock locks/unlocks ONE vehicle by its id (the per-card button).
+async function fleetToggleLock(id, locked) {
+  const uz = window.App?.lang === "uz";
+  const action = locked ? "unlock" : "lock";
+  toast(uz ? "Bajarilmoqda…" : "Working…");
+  try {
+    const r = await apiAuthFetch(`/v1/vehicles/${id}/${action}`, { method: "POST" });
+    if (r.status === 409) { toast(uz ? "Mashina bloklangan" : "Vehicle immobilized", "err"); return; }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    toast(action === "lock" ? (uz ? "Qulflandi ✓" : "Locked ✓") : (uz ? "Ochildi ✓" : "Unlocked ✓"), "ok");
+    if (window.haptic) haptic([10, 40, 12]);
+  } catch (e) {
+    toast(uz ? "Xatolik — qayta urinib ko'ring" : "Failed — try again", "err");
+  }
   loadFleet();
 }
 

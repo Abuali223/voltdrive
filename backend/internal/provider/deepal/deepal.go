@@ -42,14 +42,40 @@ type Adapter struct {
 // New returns a working deepal adapter. With cfg.BaseURL set it talks to the
 // real cloud API; otherwise it runs the simulator.
 func New(cfg Config) *Adapter {
-	seed := []provider.Snapshot{{
-		VehicleID: "deepal-002", Name: "Deepal S07", Online: true,
-		Lock: provider.Locked, EngineOn: false,
-		Energy:   provider.EnergyState{BatteryLevel: 54, RangeKm: 142},
-		Climate:  provider.ClimateState{TargetC: 21, InsideC: 18, OutsideC: 14},
-		Location: provider.Location{Lat: 40.7835, Lng: 72.346, Heading: 180},
-		Health:   provider.Health{OdometerKm: 8120, TirePressures: [4]int{232, 231, 230, 230}, ServiceDueKm: 6800},
-	}}
+	seed := []provider.Snapshot{
+		{
+			VehicleID: "deepal-002", Name: "Deepal S07", Online: true,
+			Lock: provider.Locked, EngineOn: false,
+			Energy:   provider.EnergyState{BatteryLevel: 54, RangeKm: 142},
+			Climate:  provider.ClimateState{TargetC: 21, InsideC: 18, OutsideC: 14},
+			Location: provider.Location{Lat: 40.7835, Lng: 72.346, Heading: 180},
+			Health:   provider.Health{OdometerKm: 8120, TirePressures: [4]int{232, 231, 230, 230}, ServiceDueKm: 6800},
+		},
+		{
+			VehicleID: "deepal-005", Name: "Deepal SL03", Online: true,
+			Lock: provider.Locked, EngineOn: false,
+			Energy:   provider.EnergyState{BatteryLevel: 71, RangeKm: 305},
+			Climate:  provider.ClimateState{TargetC: 22, InsideC: 20, OutsideC: 14},
+			Location: provider.Location{Lat: 40.792, Lng: 72.351, Heading: 90},
+			Health:   provider.Health{OdometerKm: 14200, TirePressures: [4]int{230, 230, 229, 229}, ServiceDueKm: 800},
+		},
+		{
+			VehicleID: "deepal-006", Name: "Deepal S05", Online: true,
+			Lock: provider.Unlocked, EngineOn: false,
+			Energy:   provider.EnergyState{BatteryLevel: 48, RangeKm: 198},
+			Climate:  provider.ClimateState{TargetC: 23, InsideC: 19, OutsideC: 14},
+			Location: provider.Location{Lat: 40.776, Lng: 72.338, Heading: 270},
+			Health:   provider.Health{OdometerKm: 5300, TirePressures: [4]int{233, 232, 231, 231}, ServiceDueKm: 9700},
+		},
+		{
+			VehicleID: "deepal-007", Name: "Deepal S09", Online: true,
+			Lock: provider.Locked, EngineOn: false,
+			Energy:   provider.EnergyState{BatteryLevel: 88, RangeKm: 520},
+			Climate:  provider.ClimateState{TargetC: 21, InsideC: 21, OutsideC: 14},
+			Location: provider.Location{Lat: 40.801, Lng: 72.36, Heading: 45},
+			Health:   provider.Health{OdometerKm: 2100, TirePressures: [4]int{235, 235, 234, 234}, ServiceDueKm: 11900},
+		},
+	}
 	a := &Adapter{sim: sim.New("deepal", seed)}
 	if cfg.BaseURL != "" && cfg.TokenSource != nil {
 		a.rest = oemrest.New(cfg.BaseURL, cfg.TokenSource)

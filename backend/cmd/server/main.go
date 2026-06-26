@@ -75,7 +75,10 @@ func main() {
 	//   }))
 	brandOf := map[string]string{
 		"voyah-001":    "voyah",
-		"deepal-002":   "deepal",
+		"deepal-002":   "deepal", // Deepal S07
+		"deepal-005":   "deepal", // Deepal SL03
+		"deepal-006":   "deepal", // Deepal S05
+		"deepal-007":   "deepal", // Deepal S09
 		"dongfeng-003": "dongfeng",
 		"byd-004":      "byd",
 	}
