@@ -615,6 +615,7 @@ function wireControls() {
   App.openReminders = openReminders;
   App.shareLocation = shareLocation;
   App.openReferral = openReferral;
+  App.openAutomation = openAutomation;
   // Premium / subscription + Fleet dashboard.
   App.openPremium = openPremium;
   App.openFleet = openFleet;
@@ -2678,6 +2679,75 @@ function openReferral() {
   o.box.querySelector("#ref-close").onclick = o.close;
   o.box.querySelector("#ref-share").onclick = async () => { try { if (navigator.share) await navigator.share({ title: "VoltDrive", text: msg }); else { await navigator.clipboard.writeText(msg); toast(uz ? "Nusxalandi" : "Copied", "ok"); } } catch (_) {} };
   o.box.querySelector("#ref-copy").onclick = async () => { try { await navigator.clipboard.writeText(code); toast(uz ? "Kod nusxalandi" : "Code copied", "ok"); } catch (_) {} };
+}
+
+// --- Automation: time-based routines ("every day at 07:00 warm up") ---
+async function openAutomation() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  let list = [];
+  try {
+    const tk = await auth.currentUser.getIdToken();
+    const r = await fetch(`${CFG.apiBase}/v1/routines`, { headers: { Authorization: `Bearer ${tk}` } });
+    if (r.ok) list = (await r.json()) || [];
+  } catch (_) {}
+  const actLabel = { climate_on: uz ? "Isitish/Klimat" : "Climate on", climate_off: uz ? "Klimatni o'chirish" : "Climate off", lock: uz ? "Qulflash" : "Lock", unlock: uz ? "Ochish" : "Unlock", start: uz ? "Dvigatel yoqish" : "Start engine", stop: uz ? "Dvigatel o'chirish" : "Stop engine" };
+  const dayLabels = uz ? ["Ya", "Du", "Se", "Ch", "Pa", "Ju", "Sh"] : ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  const save = async () => { try { const tk = await auth.currentUser.getIdToken(); await fetch(`${CFG.apiBase}/v1/routines`, { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify(list) }); } catch (_) { toast(uz ? "Saqlanmadi" : "Save failed", "err"); } };
+  let o;
+  const renderList = () => {
+    if (!list.length) return '<div style="color:#6a6c72;text-align:center;font-size:13px;padding:14px;">' + (uz ? "Avtomatlashtirish yo'q" : "No automations") + '</div>';
+    return list.map((r, i) => {
+      const t = String(r.h).padStart(2, "0") + ":" + String(r.m).padStart(2, "0");
+      const days = (!r.days || !r.days.length) ? (uz ? "Har kuni" : "Daily") : r.days.map((d) => dayLabels[d]).join(" ");
+      return '<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:12px;padding:11px 12px;margin-bottom:8px;">' +
+        '<div style="flex:1;min-width:0"><div style="color:#fff;font-weight:700;font-size:15px;font-family:\'Sora\'">' + t + ' · <span style="font-weight:600;font-size:13px;color:#c8cace">' + (actLabel[r.action] || r.action) + (r.action === "climate_on" ? " " + r.temp + "°" : "") + '</span></div><div style="color:#7e8086;font-size:11px;margin-top:2px;">' + days + '</div></div>' +
+        '<div data-tog="' + i + '" style="width:40px;height:23px;border-radius:12px;background:' + (r.on ? "#FF6A1A" : "rgba(255,255,255,.15)") + ';position:relative;cursor:pointer;flex-shrink:0;"><div style="width:19px;height:19px;border-radius:50%;background:#fff;position:absolute;top:2px;left:' + (r.on ? "19px" : "2px") + ';transition:.2s;"></div></div>' +
+        '<div data-del="' + i + '" style="color:#ff6a6a;font-size:18px;cursor:pointer;padding:0 2px;">×</div></div>';
+    }).join("");
+  };
+  const bind = () => {
+    o.box.querySelectorAll("[data-tog]").forEach((b) => b.onclick = async () => { const i = +b.getAttribute("data-tog"); list[i].on = !list[i].on; o.box.querySelector("#au-list").innerHTML = renderList(); bind(); await save(); });
+    o.box.querySelectorAll("[data-del]").forEach((b) => b.onclick = async () => { list.splice(+b.getAttribute("data-del"), 1); o.box.querySelector("#au-list").innerHTML = renderList(); bind(); await save(); });
+  };
+  const acts = Object.keys(actLabel);
+  const inner =
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">⏰ ' + (uz ? "Avtomatlashtirish" : "Automation") + '</div>' +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:14px;">' + (uz ? "Belgilangan vaqtda avtomatik bajariladi" : "Runs automatically at the set time") + '</div>' +
+    '<div id="au-list">' + renderList() + '</div>' +
+    '<div style="border-top:1px solid rgba(255,255,255,.07);margin:12px 0;padding-top:13px;">' +
+      '<div style="display:flex;gap:9px;margin-bottom:10px;"><input id="au-time" type="time" value="07:00" style="flex:1;height:44px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 13px;font-size:14px;outline:none;font-family:Manrope;">' +
+      '<select id="au-act" style="flex:1.4;height:44px;border-radius:12px;background:#16171a;border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 10px;font-size:13px;outline:none;font-family:Manrope;">' + acts.map((a) => '<option value="' + a + '">' + actLabel[a] + '</option>').join("") + '</select></div>' +
+      '<div id="au-temp-row" style="display:none;align-items:center;gap:9px;margin-bottom:10px;"><span style="color:#9a9ca2;font-size:13px;">' + (uz ? "Harorat" : "Temp") + '</span><input id="au-temp" type="number" value="22" min="14" max="32" style="width:80px;height:40px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 12px;font-size:14px;outline:none;"><span style="color:#9a9ca2;">°C</span></div>' +
+      '<div id="au-days" style="display:flex;gap:5px;margin-bottom:11px;"></div>' +
+      '<div id="au-add" class="obtn" style="height:46px;">' + (uz ? "Qo'shish" : "Add") + '</div>' +
+    '</div>' +
+    '<div id="au-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:12px 0 2px;">' + (uz ? "Yopish" : "Close") + '</div>';
+  o = vdModal(inner, 380);
+  bind();
+  const selDays = new Set();
+  const dayWrap = o.box.querySelector("#au-days");
+  dayLabels.forEach((lab, idx) => {
+    const c = document.createElement("div");
+    c.textContent = lab;
+    c.style.cssText = "flex:1;text-align:center;padding:8px 0;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#9a9ca2;font-size:12px;font-weight:700;cursor:pointer;";
+    c.onclick = () => { if (selDays.has(idx)) { selDays.delete(idx); c.style.background = "rgba(255,255,255,.05)"; c.style.color = "#9a9ca2"; } else { selDays.add(idx); c.style.background = "rgba(255,138,43,.2)"; c.style.color = "#FF9D5C"; } };
+    dayWrap.appendChild(c);
+  });
+  const actSel = o.box.querySelector("#au-act");
+  const tempRow = o.box.querySelector("#au-temp-row");
+  const syncTemp = () => { tempRow.style.display = actSel.value === "climate_on" ? "flex" : "none"; };
+  actSel.onchange = syncTemp; syncTemp();
+  o.box.querySelector("#au-close").onclick = o.close;
+  o.box.querySelector("#au-add").onclick = async () => {
+    const tv = o.box.querySelector("#au-time").value || "07:00";
+    const parts = tv.split(":");
+    const r = { id: Date.now().toString(36), h: +parts[0], m: +parts[1], days: [...selDays].sort(), action: actSel.value, temp: +o.box.querySelector("#au-temp").value || 22, vid: curVid(), on: true };
+    list.push(r);
+    o.box.querySelector("#au-list").innerHTML = renderList(); bind();
+    await save();
+    toast(uz ? "Qo'shildi ✓" : "Added ✓", "ok");
+  };
 }
 
 // --- Guest keys (owner): create / list / revoke time-limited shared access ---

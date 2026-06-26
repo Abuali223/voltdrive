@@ -37,6 +37,7 @@ import (
 	"voltdrive/backend/internal/devices"
 	"voltdrive/backend/internal/diagnostics"
 	"voltdrive/backend/internal/fleet"
+	"voltdrive/backend/internal/routines"
 	"voltdrive/backend/internal/gcp"
 	"voltdrive/backend/internal/geofence"
 	"voltdrive/backend/internal/guestkey"
@@ -125,6 +126,7 @@ func main() {
 	var fleetStore *fleet.Store
 	var brandStore *branding.Store
 	var assistClient *assistant.Client
+	var routinesStore *routines.Store
 	if projectID != "" {
 		dsToken := gcp.NewTokenSource("https://www.googleapis.com/auth/datastore").Token
 		scheduleStore = schedule.NewStore(projectID, dsToken)
@@ -135,6 +137,7 @@ func main() {
 		userStore = users.NewStore(projectID, dsToken)
 		fleetStore = fleet.NewStore(projectID, dsToken)
 		brandStore = branding.NewStore(projectID, dsToken)
+		routinesStore = routines.NewStore(projectID, dsToken)
 		// AI assistant via Gemini on Vertex AI (cloud-platform scope; no API key).
 		assistClient = assistant.NewClient(projectID, os.Getenv("GEMINI_LOCATION"), os.Getenv("GEMINI_MODEL"),
 			gcp.NewTokenSource("https://www.googleapis.com/auth/cloud-platform").Token)
@@ -191,6 +194,12 @@ func main() {
 		log.Printf("diagnostics: proactive rule-based health watcher enabled")
 	}
 
+	// Automation: fire time-based routines ("every day at 07:00 warm up").
+	if routinesStore != nil {
+		go runRoutines(context.Background(), registry, routinesStore)
+		log.Printf("routines: automation watcher enabled")
+	}
+
 	hubCtx, hubCancel := context.WithCancel(context.Background())
 	defer hubCancel()
 	go hub.Run(hubCtx, 2*time.Second)
@@ -228,6 +237,7 @@ func main() {
 		Branding:         brandStore,
 		Assistant:        assistClient,
 		Voice:            voice.NewClient(os.Getenv("UZBEKVOICE_API_KEY")),
+		Routines:         routinesStore,
 		FCM:              fcm,
 		AllowedOrigins:   origins,
 		OwnerEmail:       os.Getenv("OWNER_EMAIL"),
@@ -309,6 +319,71 @@ func runDiagnostics(ctx context.Context, registry *provider.Registry, alerter *n
 		case <-t.C:
 		}
 	}
+}
+
+// runRoutines fires time-based automation rules every minute (Uzbekistan time,
+// UTC+5), even when the app is closed. De-dupes each rule to one fire per minute.
+func runRoutines(ctx context.Context, registry *provider.Registry, store *routines.Store) {
+	loc := time.FixedZone("UZT", 5*3600)
+	fired := map[string]string{}
+	t := time.NewTicker(60 * time.Second)
+	defer t.Stop()
+	for {
+		now := time.Now().In(loc)
+		stamp := now.Format("200601021504")
+		wd := int(now.Weekday())
+		if users, err := store.List(ctx); err == nil {
+			for _, u := range users {
+				for _, r := range u.Routines {
+					if !r.On || r.Hour != now.Hour() || r.Minute != now.Minute() {
+						continue
+					}
+					if len(r.Days) > 0 && !containsInt(r.Days, wd) {
+						continue
+					}
+					if fired[r.ID] == stamp {
+						continue
+					}
+					fired[r.ID] = stamp
+					execRoutine(ctx, registry, r)
+				}
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+func execRoutine(ctx context.Context, registry *provider.Registry, r routines.Routine) {
+	p := registry.For(r.Vehicle)
+	var err error
+	switch r.Action {
+	case "lock":
+		err = p.Lock(ctx, r.Vehicle)
+	case "unlock":
+		err = p.Unlock(ctx, r.Vehicle)
+	case "start":
+		err = p.RemoteStart(ctx, r.Vehicle)
+	case "stop":
+		err = p.RemoteStop(ctx, r.Vehicle)
+	case "climate_on":
+		err = p.SetClimate(ctx, r.Vehicle, true, float64(r.Temp))
+	case "climate_off":
+		err = p.SetClimate(ctx, r.Vehicle, false, 0)
+	}
+	log.Printf("routine fired: %s %s vid=%s err=%v", r.ID, r.Action, r.Vehicle, err)
+}
+
+func containsInt(a []int, v int) bool {
+	for _, x := range a {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 func runScheduler(store *schedule.Store, geo *geofence.Store, registry *provider.Registry, alerter *notify.FCMAlerter) {

@@ -29,6 +29,7 @@ import (
 	"voltdrive/backend/internal/notify"
 	"voltdrive/backend/internal/provider"
 	"voltdrive/backend/internal/realtime"
+	"voltdrive/backend/internal/routines"
 	"voltdrive/backend/internal/schedule"
 	"voltdrive/backend/internal/subscription"
 	"voltdrive/backend/internal/users"
@@ -53,6 +54,7 @@ type Server struct {
 	Branding         *branding.Store     // optional: white-label theme (super-admin editable)
 	Assistant        *assistant.Client   // optional: Gemini-backed AI assistant
 	Voice            *voice.Client       // optional: UzbekVoice STT/TTS proxy
+	Routines         *routines.Store     // optional: time-based automation rules
 	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
 	AllowedOrigins   []string            // CORS allowlist (empty = permissive "*")
 	OwnerEmail       string              // bootstrap fleet owner (full access without a Firestore grant)
@@ -169,6 +171,10 @@ func (s *Server) Routes() http.Handler {
 	if s.Assistant != nil {
 		mux.HandleFunc("POST /v1/assistant", s.guardUser(s.handleAssistant))
 		mux.HandleFunc("POST /v1/diagnose", s.guardUser(s.handleDiagnose))
+	}
+	if s.Routines != nil {
+		mux.HandleFunc("GET /v1/routines", s.guardUser(s.handleRoutinesGet))
+		mux.HandleFunc("PUT /v1/routines", s.guardUser(s.handleRoutinesPut))
 	}
 	if s.Voice != nil && s.Voice.Enabled() {
 		mux.HandleFunc("POST /v1/voice/stt", s.guardUserT(80*time.Second, s.handleVoiceSTT))
@@ -804,6 +810,35 @@ func (s *Server) handleDiagnose(w http.ResponseWriter, r *http.Request, user aut
 		return
 	}
 	writeJSON(w, http.StatusOK, rep)
+}
+
+func (s *Server) handleRoutinesGet(w http.ResponseWriter, r *http.Request, user auth.User) {
+	list, err := s.Routines.Get(r.Context(), user.UID)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load routines")
+		return
+	}
+	if list == nil {
+		list = []routines.Routine{}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+func (s *Server) handleRoutinesPut(w http.ResponseWriter, r *http.Request, user auth.User) {
+	var list []routines.Routine
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&list); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if len(list) > 30 {
+		writeErr(w, http.StatusBadRequest, "too many routines")
+		return
+	}
+	if err := s.Routines.Put(r.Context(), user.UID, list); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not save routines")
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
 }
 
 // handleVoiceSTT transcribes uploaded Uzbek audio via UzbekVoice.
