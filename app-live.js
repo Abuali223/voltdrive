@@ -622,6 +622,7 @@ function wireControls() {
   App.openTrips = openTrips;
   App.openTripPlanner = openTripPlanner;
   App.openTeenMode = openTeenMode;
+  App.openInsights = openInsights;
   // Premium / subscription + Fleet dashboard.
   App.openPremium = openPremium;
   App.openFleet = openFleet;
@@ -2754,6 +2755,72 @@ async function openAutomation() {
     await save();
     toast(uz ? "Qo'shildi ✓" : "Added ✓", "ok");
   };
+}
+
+// --- Driving insights: analytics computed from server trip history ---
+async function openInsights() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  const vid = curVid();
+  const o = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">📊 ' + (uz ? "Haydash tahlili" : "Driving insights") + '</div>' +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:14px;">' + (uz ? "Sayohatlaringiz asosida tahlil" : "Computed from your trips") + '</div>' +
+    '<div id="in-body"><div style="color:#6a6c72;text-align:center;font-size:13px;padding:18px;">' + (uz ? "Yuklanmoqda…" : "Loading…") + '</div></div>' +
+    '<div id="in-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:14px 0 2px;">' + (uz ? "Yopish" : "Close") + '</div>',
+    380);
+  o.box.querySelector("#in-close").onclick = o.close;
+  const body = o.box.querySelector("#in-body");
+  let list = [];
+  try {
+    const tk = await auth.currentUser.getIdToken();
+    const r = await fetch(`${CFG.apiBase}/v1/trips?vid=${encodeURIComponent(vid)}`, { headers: { Authorization: `Bearer ${tk}` } });
+    if (r.ok) list = (await r.json()) || [];
+  } catch (_) {}
+  if (!list.length) {
+    body.innerHTML = '<div style="color:#6a6c72;text-align:center;font-size:13px;padding:20px;line-height:1.5;">' + (uz ? "Tahlil uchun ma'lumot yo'q.<br>Bir necha marta yuring." : "Not enough data yet.<br>Drive a few trips first.") + '</div>';
+    return;
+  }
+  const nowS = Date.now() / 1000;
+  const totKm = list.reduce((s, t) => s + (t.d || 0), 0);
+  const trips = list.length;
+  const avg = Math.round(totKm / trips);
+  const totSoc = list.reduce((s, t) => s + Math.max(0, (t.ss || 0) - (t.es || 0)), 0);
+  const eff = totSoc > 0 ? (totKm / totSoc).toFixed(1) : "—"; // km per % battery
+  // Last-7-days bar chart (by day).
+  const days = uz ? ["Ya", "Du", "Se", "Ch", "Pa", "Ju", "Sh"] : ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  const buckets = [0, 0, 0, 0, 0, 0, 0]; // index by weekday over last 7 days
+  const labels = [];
+  for (let i = 6; i >= 0; i--) { const d = new Date(Date.now() - i * 86400000); labels.push(days[d.getDay()]); }
+  const dayKm = [0, 0, 0, 0, 0, 0, 0]; // aligned to labels (oldest→newest)
+  list.forEach((t) => {
+    const ageDays = Math.floor((nowS - (t.st || 0)) / 86400);
+    if (ageDays >= 0 && ageDays < 7) dayKm[6 - ageDays] += (t.d || 0);
+  });
+  const maxKm = Math.max(1, ...dayKm);
+  // Eco score: better efficiency + moderate trip length → higher score (0-100).
+  const ecoBase = totSoc > 0 ? Math.min(100, Math.round((totKm / totSoc) * 12)) : 70;
+  const eco = Math.max(20, Math.min(100, ecoBase));
+  const ecoColor = eco >= 75 ? "#43d684" : eco >= 50 ? "#FF9D5C" : "#ff6a6a";
+  const card = (big, lbl, sub) => '<div style="flex:1;background:rgba(255,255,255,.04);border-radius:13px;padding:13px 10px;text-align:center;"><div style="color:#fff;font-family:\'Sora\';font-weight:800;font-size:19px;">' + big + '</div><div style="color:#7e8086;font-size:11px;margin-top:2px;">' + lbl + '</div>' + (sub ? '<div style="color:#5a5c62;font-size:10px;">' + sub + '</div>' : '') + '</div>';
+  let html = '';
+  // Eco score ring-ish header.
+  html += '<div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.04);border-radius:14px;padding:14px;margin-bottom:12px;">' +
+    '<div style="width:58px;height:58px;border-radius:50%;border:5px solid ' + ecoColor + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="color:#fff;font-family:\'Sora\';font-weight:800;font-size:18px;">' + eco + '</span></div>' +
+    '<div style="flex:1;"><div style="color:#fff;font-weight:700;font-size:15px;">' + (uz ? "Eko-ball" : "Eco score") + '</div><div style="color:#9a9ca2;font-size:12px;margin-top:2px;">' + (eco >= 75 ? (uz ? "A'lo — tejamkor haydash" : "Great — efficient driving") : eco >= 50 ? (uz ? "Yaxshi — yana yaxshilanadi" : "Good — room to improve") : (uz ? "Tejamkorlikni oshiring" : "Try to drive more gently")) + '</div></div></div>';
+  html += '<div style="display:flex;gap:9px;margin-bottom:10px;">' + card(totKm + " km", uz ? "Jami" : "Total") + card(trips, uz ? "Sayohat" : "Trips") + card(avg + " km", uz ? "O'rtacha" : "Avg") + '</div>';
+  html += '<div style="display:flex;gap:9px;margin-bottom:14px;">' + card(eff, uz ? "km / 1% batareya" : "km per 1% batt") + card(totSoc + "%", uz ? "Sarflangan quvvat" : "Energy used") + '</div>';
+  // Bar chart.
+  html += '<div style="color:#7e8086;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;">' + (uz ? "So'nggi 7 kun" : "Last 7 days") + '</div>';
+  html += '<div style="display:flex;align-items:flex-end;gap:6px;height:90px;background:rgba(255,255,255,.03);border-radius:12px;padding:10px;">';
+  for (let i = 0; i < 7; i++) {
+    const hpct = Math.round((dayKm[i] / maxKm) * 100);
+    html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%;">' +
+      '<div style="color:#9a9ca2;font-size:9px;">' + (dayKm[i] > 0 ? dayKm[i] : "") + '</div>' +
+      '<div style="width:100%;height:' + Math.max(3, hpct) + '%;background:linear-gradient(180deg,#FF8A2B,#FF4D00);border-radius:5px;min-height:3px;"></div>' +
+      '<div style="color:#7e8086;font-size:10px;">' + labels[i] + '</div></div>';
+  }
+  html += '</div>';
+  body.innerHTML = html;
 }
 
 // --- Teen / young-driver mode: speed limit + curfew safety monitoring ---
