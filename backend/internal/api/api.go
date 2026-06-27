@@ -23,14 +23,17 @@ import (
 	"voltdrive/backend/internal/branding"
 	"voltdrive/backend/internal/commands"
 	"voltdrive/backend/internal/devices"
+	"voltdrive/backend/internal/devreg"
 	"voltdrive/backend/internal/fleet"
 	"voltdrive/backend/internal/geofence"
 	"voltdrive/backend/internal/guestkey"
 	"voltdrive/backend/internal/immobilizer"
+	"voltdrive/backend/internal/installers"
 	"voltdrive/backend/internal/members"
 	"voltdrive/backend/internal/notify"
 	"voltdrive/backend/internal/payments"
 	"voltdrive/backend/internal/provider"
+	"voltdrive/backend/internal/provider/starline"
 	"voltdrive/backend/internal/realtime"
 	"voltdrive/backend/internal/routines"
 	"voltdrive/backend/internal/schedule"
@@ -63,6 +66,9 @@ type Server struct {
 	Commands         *commands.Store     // optional: remote-command history
 	Immobilizer      *immobilizer.Store  // optional: anti-theft engine lockout
 	Payments         *payments.Service   // optional: Click / Payme checkout + webhooks
+	DevReg           *devreg.Store       // optional: installed-device registry
+	Installers       *installers.Store   // optional: installer email allowlist
+	StarLine         *starline.Client    // optional: shared StarLine client for binding new devices
 	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
 	AllowedOrigins   []string            // CORS allowlist (empty = permissive "*")
 	OwnerEmail       string              // bootstrap fleet owner (full access without a Firestore grant)
@@ -166,6 +172,20 @@ func (s *Server) Routes() http.Handler {
 		mux.HandleFunc("GET /v1/admin/subscriptions", s.guardUser(s.handleAdminSubs))
 		mux.HandleFunc("POST /v1/admin/subscriptions/{uid}/activate", s.guardUser(s.handleAdminActivate))
 		mux.HandleFunc("POST /v1/admin/subscriptions/{uid}/revoke", s.guardUser(s.handleAdminRevoke))
+	}
+
+	// Installer panel: register / test / remove telematics devices (installer or
+	// admin); super-admin manages the installer allowlist.
+	if s.DevReg != nil {
+		mux.HandleFunc("GET /v1/installer/devices", s.guardUser(s.handleInstDevList))
+		mux.HandleFunc("POST /v1/installer/devices", s.guardUser(s.handleInstDevRegister))
+		mux.HandleFunc("DELETE /v1/installer/devices/{deviceId}", s.guardUser(s.handleInstDevRemove))
+		mux.HandleFunc("POST /v1/installer/devices/{deviceId}/test", s.guardUser(s.handleInstDevTest))
+	}
+	if s.Installers != nil {
+		mux.HandleFunc("GET /v1/admin/installers", s.guardUser(s.handleInstallersList))
+		mux.HandleFunc("POST /v1/admin/installers", s.guardUser(s.handleInstallersAdd))
+		mux.HandleFunc("DELETE /v1/admin/installers/{email}", s.guardUser(s.handleInstallersRemove))
 	}
 
 	// Payments (Click / Payme). Checkout is user-authenticated; the gateway
@@ -851,6 +871,15 @@ func (s *Server) isAdmin(ctx context.Context, u auth.User) bool {
 	return s.Admins != nil && u.Email != "" && u.EmailVerified && s.Admins.IsAdmin(ctx, u.Email)
 }
 
+// isInstaller reports whether the caller may register/test devices: any admin,
+// or a verified email on the installer allowlist.
+func (s *Server) isInstaller(ctx context.Context, u auth.User) bool {
+	if s.isAdmin(ctx, u) {
+		return true
+	}
+	return s.Installers != nil && u.Email != "" && u.EmailVerified && s.Installers.IsInstaller(ctx, u.Email)
+}
+
 // premiumEntitled reports whether the caller may use a PRO feature (fleet,
 // AI assistant): an active subscription, or any admin. Enforced server-side so
 // the paywall cannot be bypassed by calling the API directly.
@@ -1278,9 +1307,10 @@ func (s *Server) handleAdminRevoke(w http.ResponseWriter, r *http.Request, user 
 // panel can show or hide the admin-management section.
 func (s *Server) handleWhoAmI(w http.ResponseWriter, r *http.Request, user auth.User) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"email": user.Email,
-		"admin": s.isAdmin(r.Context(), user),
-		"super": s.isSuperAdmin(user),
+		"email":     user.Email,
+		"admin":     s.isAdmin(r.Context(), user),
+		"super":     s.isSuperAdmin(user),
+		"installer": s.isInstaller(r.Context(), user),
 	})
 }
 
@@ -1333,6 +1363,160 @@ func (s *Server) handleAdminsRemove(w http.ResponseWriter, r *http.Request, user
 		return
 	}
 	audit(r, user, email, "admin:remove", nil)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// --- Installer panel: device registry ---
+
+func (s *Server) handleInstDevList(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isInstaller(r.Context(), user) {
+		writeErr(w, http.StatusForbidden, "installer only")
+		return
+	}
+	list, err := s.DevReg.List(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not list devices")
+		return
+	}
+	if list == nil {
+		list = []devreg.Device{}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// handleInstDevRegister stores a device and binds it into the live registry so
+// the app can immediately control the real vehicle.
+func (s *Server) handleInstDevRegister(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isInstaller(r.Context(), user) {
+		writeErr(w, http.StatusForbidden, "installer only")
+		return
+	}
+	var req struct {
+		DeviceID string `json:"deviceId"`
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+		Plate    string `json:"plate"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&req); err != nil || strings.TrimSpace(req.DeviceID) == "" {
+		writeErr(w, http.StatusBadRequest, "deviceId required")
+		return
+	}
+	if req.Provider == "" {
+		req.Provider = "starline"
+	}
+	d := devreg.Device{
+		DeviceID: strings.TrimSpace(req.DeviceID), Provider: req.Provider,
+		Model: req.Model, Plate: req.Plate, Installer: user.Email, InstalledAt: time.Now().Unix(),
+	}
+	if err := s.DevReg.Put(r.Context(), d); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not save device")
+		return
+	}
+	s.bindDevice(d)
+	audit(r, user, d.DeviceID, "device:register", nil)
+	writeJSON(w, http.StatusOK, d)
+}
+
+// bindDevice wires a registered device's id to its provider in the live registry.
+func (s *Server) bindDevice(d devreg.Device) {
+	if s.Registry == nil {
+		return
+	}
+	switch d.Provider {
+	case "starline":
+		if s.StarLine != nil {
+			s.Registry.Bind(d.DeviceID, s.StarLine)
+		}
+	}
+}
+
+func (s *Server) handleInstDevRemove(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isInstaller(r.Context(), user) {
+		writeErr(w, http.StatusForbidden, "installer only")
+		return
+	}
+	id, _ := url.PathUnescape(r.PathValue("deviceId"))
+	if err := s.DevReg.Delete(r.Context(), id); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not remove device")
+		return
+	}
+	if s.Registry != nil {
+		s.Registry.Unbind(id)
+	}
+	audit(r, user, id, "device:remove", nil)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleInstDevTest verifies a registered device responds, returning its live
+// snapshot summary + capabilities so the installer can confirm CAN works.
+func (s *Server) handleInstDevTest(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isInstaller(r.Context(), user) {
+		writeErr(w, http.StatusForbidden, "installer only")
+		return
+	}
+	id, _ := url.PathUnescape(r.PathValue("deviceId"))
+	snap, err := s.Registry.For(id).Snapshot(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":           true,
+		"online":       snap.Online,
+		"lock":         snap.Lock,
+		"capabilities": provider.CapabilitiesOf(s.Registry.For(id)),
+	})
+}
+
+// --- Installer allowlist (super-admin) ---
+
+func (s *Server) handleInstallersList(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isAdmin(r.Context(), user) {
+		writeErr(w, http.StatusForbidden, "admin only")
+		return
+	}
+	list, err := s.Installers.List(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not list installers")
+		return
+	}
+	if list == nil {
+		list = []string{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"installers": list})
+}
+
+func (s *Server) handleInstallersAdd(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isSuperAdmin(user) {
+		writeErr(w, http.StatusForbidden, "super admin only")
+		return
+	}
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<13)).Decode(&req); err != nil || !strings.Contains(req.Email, "@") {
+		writeErr(w, http.StatusBadRequest, "valid email required")
+		return
+	}
+	if err := s.Installers.Add(r.Context(), req.Email); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not add installer")
+		return
+	}
+	audit(r, user, req.Email, "installer:add", nil)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleInstallersRemove(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if !s.isSuperAdmin(user) {
+		writeErr(w, http.StatusForbidden, "super admin only")
+		return
+	}
+	email, _ := url.PathUnescape(r.PathValue("email"))
+	if err := s.Installers.Remove(r.Context(), email); err != nil {
+		writeErr(w, http.StatusBadGateway, "could not remove installer")
+		return
+	}
+	audit(r, user, email, "installer:remove", nil)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 

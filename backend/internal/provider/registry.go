@@ -26,6 +26,13 @@ func (r *Registry) Bind(vehicleID string, p VehicleProvider) {
 	r.byVehicle[strings.ToLower(vehicleID)] = p
 }
 
+// Unbind removes a vehicle binding (For falls back to the default afterwards).
+func (r *Registry) Unbind(vehicleID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.byVehicle, strings.ToLower(vehicleID))
+}
+
 // For returns the adapter responsible for a vehicle, or the default.
 func (r *Registry) For(vehicleID string) VehicleProvider {
 	r.mu.RLock()

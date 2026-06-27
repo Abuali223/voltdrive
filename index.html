@@ -849,6 +849,11 @@ body{
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.admin">Admin panel</div>
         <span id="admin-badge" style="font-size:10px;font-weight:800;color:#0a0b0d;background:linear-gradient(150deg,#FFCf6a,var(--g1));padding:3px 8px;border-radius:6px;letter-spacing:.5px;">ADMIN</span>
       </div>
+      <div class="prow" id="installer-row" style="display:none;" onclick="App.openInstaller()">
+        <div class="chip sm neu"><i data-lucide="wrench" style="width:16px;height:16px"></i></div>
+        <div style="flex:1;color:#fff;font-weight:600;font-size:14px;">Installer paneli</div>
+        <span style="font-size:10px;font-weight:800;color:#0a0b0d;background:linear-gradient(150deg,#7fd1ff,#4a96e8);padding:3px 8px;border-radius:6px;letter-spacing:.5px;">INSTALLER</span>
+      </div>
       <div class="prow" onclick="App.enableNotifications()">
         <div class="chip sm neu"><i data-lucide="bell" style="width:16px;height:16px"></i></div>
         <div style="flex:1;color:#fff;font-weight:600;font-size:14px;" data-i18n="profile.notif">Notifications</div>
@@ -950,6 +955,28 @@ body{
   </div>
   <div style="flex:1;overflow-y:auto;padding:6px 20px 90px;" id="fleet-list">
     <div style="color:#6a6c72;text-align:center;padding:30px;font-size:13px;" data-i18n="fleet.loading">Yuklanmoqda…</div>
+  </div>
+</div>
+
+<!-- ===== SCREEN: INSTALLER PANEL ===== -->
+<div class="screen" id="s-installer">
+  <div class="sb"><span class="sb-t time">19:02</span><span class="sb-i"><i data-lucide="signal" style="width:14px;height:14px"></i><i data-lucide="wifi" style="width:14px;height:14px"></i><i data-lucide="battery-medium" style="width:14px;height:14px"></i></span></div>
+  <div style="display:flex;align-items:center;gap:14px;padding:14px 20px 6px;flex-shrink:0;">
+    <div class="ibtn" onclick="App.back()"><i data-lucide="chevron-left" style="width:20px;height:20px"></i></div>
+    <div style="flex:1"><div style="font-family:'Sora';font-weight:700;font-size:18px;color:#fff;">Installer paneli</div><div style="color:#7e8086;font-size:12px;">Qurilma o'rnatish va ulash</div></div>
+    <div class="ibtn" onclick="App.installerLoad()"><i data-lucide="refresh-cw" style="width:17px;height:17px"></i></div>
+  </div>
+  <div style="padding:8px 20px;flex-shrink:0;background:rgba(255,255,255,.03);border-radius:14px;margin:6px 16px;">
+    <div style="color:#7e8086;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:8px 0 9px;">Yangi qurilma ulash</div>
+    <input id="inst-id" placeholder="StarLine device ID" style="width:100%;height:44px;border-radius:11px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 13px;font-size:14px;outline:none;font-family:Manrope;box-sizing:border-box;margin-bottom:9px;">
+    <div style="display:flex;gap:9px;margin-bottom:10px;">
+      <input id="inst-model" placeholder="Model" style="flex:1;height:44px;border-radius:11px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 13px;font-size:14px;outline:none;font-family:Manrope;box-sizing:border-box;">
+      <input id="inst-plate" placeholder="01 A 123 BC" style="flex:1;height:44px;border-radius:11px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:0 13px;font-size:14px;outline:none;font-family:Manrope;box-sizing:border-box;text-transform:uppercase;">
+    </div>
+    <div id="inst-add" class="obtn" style="height:46px;margin-bottom:10px;"><i data-lucide="link" style="width:16px;height:16px"></i><span>Ro'yxatdan o'tkazish</span></div>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:6px 20px 90px;" id="inst-list">
+    <div style="color:#6a6c72;text-align:center;padding:30px;font-size:13px;">Yuklanmoqda…</div>
   </div>
 </div>
 

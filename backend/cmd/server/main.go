@@ -36,12 +36,14 @@ import (
 	"voltdrive/backend/internal/branding"
 	"voltdrive/backend/internal/commands"
 	"voltdrive/backend/internal/devices"
+	"voltdrive/backend/internal/devreg"
 	"voltdrive/backend/internal/diagnostics"
 	"voltdrive/backend/internal/fleet"
 	"voltdrive/backend/internal/gcp"
 	"voltdrive/backend/internal/geofence"
 	"voltdrive/backend/internal/guestkey"
 	"voltdrive/backend/internal/immobilizer"
+	"voltdrive/backend/internal/installers"
 	"voltdrive/backend/internal/members"
 	"voltdrive/backend/internal/notify"
 	"voltdrive/backend/internal/payments"
@@ -101,11 +103,12 @@ func main() {
 		Login:     os.Getenv("STARLINE_LOGIN"),
 		Password:  os.Getenv("STARLINE_PASSWORD"),
 	}
+	var slClient *starline.Client
 	if slCfg.Ready() {
-		sl := starline.New(slCfg)
+		slClient = starline.New(slCfg)
 		for _, id := range strings.Split(os.Getenv("STARLINE_DEVICES"), ",") {
 			if id = strings.TrimSpace(id); id != "" {
-				registry.Bind(id, sl)
+				registry.Bind(id, slClient)
 				mirrorIDs = append(mirrorIDs, id)
 				log.Printf("starline: bound live device %s", id)
 			}
@@ -157,6 +160,8 @@ func main() {
 	var routinesStore *routines.Store
 	var tripsStore *trips.Store
 	var commandsStore *commands.Store
+	var devRegStore *devreg.Store
+	var installersStore *installers.Store
 	var immoStore *immobilizer.Store
 	var paymentsSvc *payments.Service
 	if projectID != "" {
@@ -172,7 +177,23 @@ func main() {
 		routinesStore = routines.NewStore(projectID, dsToken)
 		tripsStore = trips.NewStore(projectID, dsToken)
 		commandsStore = commands.NewStore(projectID, dsToken)
+		devRegStore = devreg.NewStore(projectID, dsToken)
+		installersStore = installers.NewStore(projectID, dsToken)
 		immoStore = immobilizer.NewStore(projectID, dsToken)
+
+		// Re-bind devices that installers registered earlier, so control survives
+		// restarts (StarLine devices map to the shared client).
+		if slClient != nil {
+			if devs, err := devRegStore.List(context.Background()); err == nil {
+				for _, d := range devs {
+					if d.Provider == "starline" {
+						registry.Bind(d.DeviceID, slClient)
+						mirrorIDs = append(mirrorIDs, d.DeviceID)
+					}
+				}
+				log.Printf("devreg: re-bound %d installed device(s)", len(devs))
+			}
+		}
 
 		// Payments (Click / Payme). Inert until merchant credentials are set in the
 		// environment; a successful payment activates the user's premium tier.
@@ -311,6 +332,9 @@ func main() {
 		Routines:         routinesStore,
 		Trips:            tripsStore,
 		Commands:         commandsStore,
+		DevReg:           devRegStore,
+		Installers:       installersStore,
+		StarLine:         slClient,
 		Immobilizer:      immoStore,
 		Payments:         paymentsSvc,
 		FCM:              fcm,

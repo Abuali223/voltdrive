@@ -656,6 +656,10 @@ function wireControls() {
   App.openAutomation = openAutomation;
   App.openTrips = openTrips;
   App.openCommandHistory = openCommandHistory;
+  App.openInstaller = openInstaller;
+  App.installerLoad = installerLoad;
+  App.installerTest = installerTest;
+  App.installerRemove = installerRemove;
   App.openTripPlanner = openTripPlanner;
   App.openTeenMode = openTeenMode;
   App.openInsights = openInsights;
@@ -2387,6 +2391,8 @@ async function checkAdminAccess() {
     row.style.display = d.admin ? "flex" : "none";
     const badge = document.getElementById("admin-badge");
     if (badge && d.super) badge.textContent = "SUPER";
+    const inst = document.getElementById("installer-row");
+    if (inst) inst.style.display = (d.installer || d.admin) ? "flex" : "none";
   } catch (e) { row.style.display = "none"; }
 }
 
@@ -3193,6 +3199,78 @@ async function openTeenMode() {
     toast(uz ? "Saqlandi ✓" : "Saved ✓", "ok");
     o.close();
   };
+}
+
+// --- Installer panel: register / test / remove telematics devices ---
+async function openInstaller() {
+  if (!CFG.apiBase || !auth?.currentUser) { toast("Avval tizimga kiring"); return; }
+  window.App.go("installer");
+  const add = document.getElementById("inst-add");
+  if (add && !add._wired) { add._wired = true; add.onclick = installerRegister; }
+  installerLoad();
+}
+
+async function installerLoad() {
+  const list = document.getElementById("inst-list");
+  if (!list) return;
+  list.innerHTML = '<div style="color:#6a6c72;text-align:center;padding:30px;font-size:13px;">Yuklanmoqda…</div>';
+  let devs = [];
+  try {
+    const r = await apiAuthFetch("/v1/installer/devices");
+    if (r.status === 403) { list.innerHTML = '<div style="color:#FF8A3D;text-align:center;padding:24px;font-size:13px;">Ruxsat yo\'q — installer roli kerak</div>'; return; }
+    if (r.ok) devs = (await r.json()) || [];
+  } catch (_) {}
+  if (!devs.length) { list.innerHTML = '<div style="color:#6a6c72;text-align:center;padding:26px;font-size:13px;line-height:1.5;">Hali qurilma yo\'q.<br>Yuqorida ID kiritib ulang.</div>'; return; }
+  list.innerHTML = devs.map((d) => {
+    const dt = d.installedAt ? new Date(d.installedAt * 1000).toLocaleDateString("uz", { day: "numeric", month: "short" }) : "";
+    return '<div class="fleet-card" data-did="' + escapeHtml(d.deviceId) + '">' +
+      '<div style="flex:1;min-width:0"><div style="color:#fff;font-weight:700;font-size:14px;font-family:\'Sora\'">' + escapeHtml(d.model || d.deviceId) + (d.plate ? ' <span style="color:#8a8c92;font-weight:600;font-size:12px;">· ' + escapeHtml(d.plate) + '</span>' : '') + '</div>' +
+      '<div style="color:#8a8c92;font-size:11px;margin-top:2px;">' + escapeHtml(d.provider || "starline") + ' · ' + escapeHtml(d.deviceId) + (dt ? ' · ' + dt : '') + '</div>' +
+      '<div class="inst-res" style="font-size:11px;margin-top:3px;"></div></div>' +
+      '<div class="ibtn" style="width:36px;height:36px;" title="Test" onclick="App.installerTest(\'' + escapeHtml(d.deviceId) + '\')"><i data-lucide="activity" style="width:16px;height:16px;color:#5aa6f0"></i></div>' +
+      '<div class="ibtn" style="width:32px;height:32px;" onclick="App.installerRemove(\'' + escapeHtml(d.deviceId) + '\')"><i data-lucide="x" style="width:15px;height:15px;color:#ff8a8a"></i></div>' +
+      '</div>';
+  }).join("");
+  if (window.lucide) lucide.createIcons();
+}
+
+async function installerRegister() {
+  const id = (document.getElementById("inst-id").value || "").trim();
+  const model = (document.getElementById("inst-model").value || "").trim();
+  const plate = (document.getElementById("inst-plate").value || "").trim();
+  if (!id) { document.getElementById("inst-id").focus(); return; }
+  try {
+    const r = await apiAuthFetch("/v1/installer/devices", { method: "POST", body: JSON.stringify({ deviceId: id, provider: "starline", model, plate }) });
+    if (r.status === 403) { toast("Ruxsat yo'q — installer roli kerak"); return; }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    document.getElementById("inst-id").value = ""; document.getElementById("inst-model").value = ""; document.getElementById("inst-plate").value = "";
+    toast("Ulandi ✓ — test qiling", "ok");
+    installerLoad();
+  } catch (e) { toast("Xatolik — qayta urinib ko'ring", "err"); }
+}
+
+async function installerTest(id) {
+  const card = document.querySelector('#inst-list .fleet-card[data-did="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+  const res = card && card.querySelector(".inst-res");
+  if (res) { res.style.color = "#9a9ca2"; res.textContent = "Tekshirilmoqda…"; }
+  try {
+    const r = await apiAuthFetch(`/v1/installer/devices/${encodeURIComponent(id)}/test`, { method: "POST" });
+    const d = await r.json();
+    if (res) {
+      if (d.ok) { res.style.color = "#43d684"; res.textContent = "✓ Ulanish bor · " + (d.online ? "onlayn" : "oflayn") + " · " + ((d.capabilities || []).length) + " funksiya"; }
+      else { res.style.color = "#ff6a6a"; res.textContent = "✗ Javob yo'q: " + (d.error || "xatolik"); }
+    }
+  } catch (e) { if (res) { res.style.color = "#ff6a6a"; res.textContent = "✗ Xatolik"; } }
+}
+
+async function installerRemove(id) {
+  if (!confirm("Bu qurilmani o'chirasizmi?")) return;
+  try {
+    const r = await apiAuthFetch(`/v1/installer/devices/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    toast("O'chirildi", "ok");
+    installerLoad();
+  } catch (e) { toast("Xatolik", "err"); }
 }
 
 // --- Command history: who ran which remote command, when, and the result ---
