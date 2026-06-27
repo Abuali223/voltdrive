@@ -655,6 +655,7 @@ function wireControls() {
   App.openReferral = openReferral;
   App.openAutomation = openAutomation;
   App.openTrips = openTrips;
+  App.openCommandHistory = openCommandHistory;
   App.openTripPlanner = openTripPlanner;
   App.openTeenMode = openTeenMode;
   App.openInsights = openInsights;
@@ -3192,6 +3193,49 @@ async function openTeenMode() {
     toast(uz ? "Saqlandi ✓" : "Saved ✓", "ok");
     o.close();
   };
+}
+
+// --- Command history: who ran which remote command, when, and the result ---
+async function openCommandHistory() {
+  const uz = window.App?.lang === "uz";
+  if (!CFG.apiBase || !auth?.currentUser) { toast(uz ? "Avval tizimga kiring" : "Sign in first"); return; }
+  const vid = curVid();
+  const o = vdModal(
+    '<div style="font-family:\'Sora\';font-weight:800;font-size:18px;color:#fff;margin-bottom:4px;">🧾 ' + (uz ? "Buyruqlar tarixi" : "Command history") + '</div>' +
+    '<div style="color:#9a9ca2;font-size:12px;margin-bottom:14px;">' + (uz ? "Kim, qachon va qanday buyruq yubordi" : "Who ran what, and when") + '</div>' +
+    '<div id="ch-list"><div style="color:#6a6c72;text-align:center;font-size:13px;padding:18px;">' + (uz ? "Yuklanmoqda…" : "Loading…") + '</div></div>' +
+    '<div id="ch-close" style="text-align:center;color:#9a9ca2;font-weight:700;font-size:14px;cursor:pointer;padding:14px 0 2px;">' + (uz ? "Yopish" : "Close") + '</div>',
+    380);
+  o.box.querySelector("#ch-close").onclick = o.close;
+  const lbl = {
+    lock: { t: uz ? "Qulflandi" : "Locked", i: "lock", c: "#43d684" },
+    unlock: { t: uz ? "Ochildi" : "Unlocked", i: "lock-open", c: "var(--acc)" },
+    start: { t: uz ? "Yoqildi" : "Started", i: "power", c: "#43d684" },
+    stop: { t: uz ? "O'chirildi" : "Stopped", i: "power-off", c: "#9a9ca2" },
+    climate: { t: uz ? "Klimat" : "Climate", i: "snowflake", c: "#5aa6f0" },
+  };
+  const fmt = (ts) => { const d = new Date(ts * 1000); return d.toLocaleDateString(uz ? "uz" : "en", { day: "numeric", month: "short" }) + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  let list = [];
+  try {
+    const tk = await auth.currentUser.getIdToken();
+    const r = await fetch(`${CFG.apiBase}/v1/vehicles/${encodeURIComponent(vid)}/commands`, { headers: { Authorization: `Bearer ${tk}` } });
+    if (r.ok) list = (await r.json()) || [];
+  } catch (_) {}
+  const el = o.box.querySelector("#ch-list");
+  if (!list.length) {
+    el.innerHTML = '<div style="color:#6a6c72;text-align:center;font-size:13px;padding:20px;line-height:1.5;">' + (uz ? "Hozircha buyruq yo'q.<br>Mashinani boshqarganda bu yerda ko'rinadi." : "No commands yet.") + '</div>';
+    return;
+  }
+  el.innerHTML = list.map((c) => {
+    const m = lbl[c.action] || { t: c.action, i: "circle", c: "#9a9ca2" };
+    const who = (c.email || "").split("@")[0] || (uz ? "Foydalanuvchi" : "User");
+    const okIcon = c.ok ? '<i data-lucide="check" style="width:15px;height:15px;color:#43d684"></i>' : '<i data-lucide="x" style="width:15px;height:15px;color:#ff6a6a"></i>';
+    return '<div style="display:flex;align-items:center;gap:11px;background:rgba(255,255,255,.04);border-radius:12px;padding:10px 12px;margin-bottom:7px;">' +
+      '<div style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i data-lucide="' + m.i + '" style="width:17px;height:17px;color:' + m.c + '"></i></div>' +
+      '<div style="flex:1;min-width:0"><div style="color:#fff;font-weight:700;font-size:14px;">' + m.t + '</div>' +
+      '<div style="color:#7e8086;font-size:11px;margin-top:1px;">' + escapeHtml(who) + ' · ' + fmt(c.ts) + (c.ok ? '' : ' · ' + (uz ? "xato" : "failed")) + '</div></div>' + okIcon + '</div>';
+  }).join("");
+  if (window.lucide) lucide.createIcons();
 }
 
 // --- Trip history: server-logged drives (distance, energy, route) ---

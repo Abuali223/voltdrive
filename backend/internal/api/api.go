@@ -21,6 +21,7 @@ import (
 	"voltdrive/backend/internal/assistant"
 	"voltdrive/backend/internal/auth"
 	"voltdrive/backend/internal/branding"
+	"voltdrive/backend/internal/commands"
 	"voltdrive/backend/internal/devices"
 	"voltdrive/backend/internal/fleet"
 	"voltdrive/backend/internal/geofence"
@@ -59,6 +60,7 @@ type Server struct {
 	Voice            *voice.Client       // optional: UzbekVoice STT/TTS proxy
 	Routines         *routines.Store     // optional: time-based automation rules
 	Trips            *trips.Store        // optional: per-vehicle driving history
+	Commands         *commands.Store     // optional: remote-command history
 	Immobilizer      *immobilizer.Store  // optional: anti-theft engine lockout
 	Payments         *payments.Service   // optional: Click / Payme checkout + webhooks
 	FCM              *notify.FCM         // optional: push sender (for the test endpoint)
@@ -89,6 +91,10 @@ func (s *Server) Routes() http.Handler {
 	// Capabilities: which features this vehicle's connection actually supports,
 	// so the app shows only working controls/metrics.
 	mux.HandleFunc("GET /v1/vehicles/{id}/capabilities", s.guard(auth.ActView, s.handleCapabilities))
+	// Command history (who ran what, when, and the result).
+	if s.Commands != nil {
+		mux.HandleFunc("GET /v1/vehicles/{id}/commands", s.guard(auth.ActView, s.handleCommandsGet))
+	}
 
 	// Commands. Each is checked against the matching action.
 	mux.HandleFunc("POST /v1/vehicles/{id}/lock", s.guard(auth.ActLock, s.cmd("lock")))
@@ -430,6 +436,20 @@ func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request, _ au
 	writeJSON(w, http.StatusOK, map[string]any{"capabilities": caps})
 }
 
+// handleCommandsGet returns the vehicle's recent remote-command history.
+func (s *Server) handleCommandsGet(w http.ResponseWriter, r *http.Request, _ auth.User) {
+	id := r.PathValue("id")
+	list, err := s.Commands.Get(r.Context(), id)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "could not load command history")
+		return
+	}
+	if list == nil {
+		list = []commands.Command{}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
 // handleStream upgrades to WebSocket and pushes live telemetry. The guard
 // has already authenticated/authorized the caller. Note: the per-request
 // timeout context is not applied here — streams are long-lived.
@@ -447,28 +467,72 @@ func audit(r *http.Request, user auth.User, vehicleID, action string, err error)
 		user.UID, user.Email, vehicleID, action, result, r.Context().Value(reqIDKey))
 }
 
+// doWithRetry runs an idempotent command, retrying ONCE on a transient error
+// (lock/unlock/start/stop are idempotent, so a lost response is safe to repeat).
+// It never retries once the request context is done.
+func doWithRetry(ctx context.Context, fn func() error) error {
+	err := fn()
+	if err == nil || ctx.Err() != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return err
+	case <-time.After(350 * time.Millisecond):
+	}
+	if e2 := fn(); e2 == nil {
+		return nil
+	}
+	return err
+}
+
+// recordCmd persists a command's outcome to the per-vehicle history (best-effort,
+// off the request path).
+func (s *Server) recordCmd(vid, action string, user auth.User, cmdErr error) {
+	if s.Commands == nil {
+		return
+	}
+	c := commands.Command{
+		ID: newID(), Action: action, UID: user.UID, Email: user.Email,
+		Ts: time.Now().Unix(), OK: cmdErr == nil,
+	}
+	if cmdErr != nil {
+		c.Err = cmdErr.Error()
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		_ = s.Commands.Add(ctx, vid, c)
+	}()
+}
+
 // cmd returns a handler for a simple no-body command.
 func (s *Server) cmd(name string) func(http.ResponseWriter, *http.Request, auth.User) {
 	return func(w http.ResponseWriter, r *http.Request, user auth.User) {
 		id := r.PathValue("id")
 		p := s.Registry.For(id)
-		var err error
+		if name == "start" && s.immobilized(r.Context(), id) {
+			audit(r, user, id, name, errImmobilized)
+			s.recordCmd(id, name, user, errImmobilized)
+			writeErr(w, http.StatusConflict, "vehicle is immobilized")
+			return
+		}
+		var act func() error
 		switch name {
 		case "lock":
-			err = p.Lock(r.Context(), id)
+			act = func() error { return p.Lock(r.Context(), id) }
 		case "unlock":
-			err = p.Unlock(r.Context(), id)
+			act = func() error { return p.Unlock(r.Context(), id) }
 		case "start":
-			if s.immobilized(r.Context(), id) {
-				audit(r, user, id, name, errImmobilized)
-				writeErr(w, http.StatusConflict, "vehicle is immobilized")
-				return
-			}
-			err = p.RemoteStart(r.Context(), id)
+			act = func() error { return p.RemoteStart(r.Context(), id) }
 		case "stop":
-			err = p.RemoteStop(r.Context(), id)
+			act = func() error { return p.RemoteStop(r.Context(), id) }
+		default:
+			act = func() error { return nil }
 		}
+		err := doWithRetry(r.Context(), act)
 		audit(r, user, id, name, err)
+		s.recordCmd(id, name, user, err)
 		if err != nil {
 			writeProviderErr(w, err)
 			return

@@ -56,6 +56,13 @@ func recoverMW(next http.Handler) http.Handler {
 	})
 }
 
+// newID returns a short random hex id (for command-history records etc.).
+func newID() string {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 // requestID attaches a short id to the context and the X-Request-ID header.
 func requestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

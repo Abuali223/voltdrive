@@ -34,6 +34,7 @@ import (
 	"voltdrive/backend/internal/assistant"
 	"voltdrive/backend/internal/auth"
 	"voltdrive/backend/internal/branding"
+	"voltdrive/backend/internal/commands"
 	"voltdrive/backend/internal/devices"
 	"voltdrive/backend/internal/diagnostics"
 	"voltdrive/backend/internal/fleet"
@@ -155,6 +156,7 @@ func main() {
 	var assistClient *assistant.Client
 	var routinesStore *routines.Store
 	var tripsStore *trips.Store
+	var commandsStore *commands.Store
 	var immoStore *immobilizer.Store
 	var paymentsSvc *payments.Service
 	if projectID != "" {
@@ -169,6 +171,7 @@ func main() {
 		brandStore = branding.NewStore(projectID, dsToken)
 		routinesStore = routines.NewStore(projectID, dsToken)
 		tripsStore = trips.NewStore(projectID, dsToken)
+		commandsStore = commands.NewStore(projectID, dsToken)
 		immoStore = immobilizer.NewStore(projectID, dsToken)
 
 		// Payments (Click / Payme). Inert until merchant credentials are set in the
@@ -307,6 +310,7 @@ func main() {
 		Voice:            voice.NewClient(os.Getenv("UZBEKVOICE_API_KEY")),
 		Routines:         routinesStore,
 		Trips:            tripsStore,
+		Commands:         commandsStore,
 		Immobilizer:      immoStore,
 		Payments:         paymentsSvc,
 		FCM:              fcm,

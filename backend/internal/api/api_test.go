@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -180,3 +181,28 @@ func TestRateLimit(t *testing.T) {
 	}
 	_ = context.Background()
 }
+
+func TestDoWithRetry(t *testing.T) {
+	// Succeeds on the second attempt → retry must make it pass.
+	calls := 0
+	err := doWithRetry(context.Background(), func() error {
+		calls++
+		if calls == 1 {
+			return errTest
+		}
+		return nil
+	})
+	if err != nil || calls != 2 {
+		t.Fatalf("expected success after one retry, got err=%v calls=%d", err, calls)
+	}
+	// Already-cancelled context → no retry.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	calls = 0
+	_ = doWithRetry(ctx, func() error { calls++; return errTest })
+	if calls != 1 {
+		t.Fatalf("cancelled context must not retry, calls=%d", calls)
+	}
+}
+
+var errTest = errors.New("transient")
