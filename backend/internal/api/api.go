@@ -86,6 +86,9 @@ func (s *Server) Routes() http.Handler {
 
 	// Full vehicle state.
 	mux.HandleFunc("GET /v1/vehicles/{id}", s.guard(auth.ActView, s.handleSnapshot))
+	// Capabilities: which features this vehicle's connection actually supports,
+	// so the app shows only working controls/metrics.
+	mux.HandleFunc("GET /v1/vehicles/{id}/capabilities", s.guard(auth.ActView, s.handleCapabilities))
 
 	// Commands. Each is checked against the matching action.
 	mux.HandleFunc("POST /v1/vehicles/{id}/lock", s.guard(auth.ActLock, s.cmd("lock")))
@@ -418,6 +421,13 @@ func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request, _ auth.U
 		return
 	}
 	writeJSON(w, http.StatusOK, snap)
+}
+
+// handleCapabilities returns the feature set the vehicle's connection supports.
+func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request, _ auth.User) {
+	id := r.PathValue("id")
+	caps := provider.CapabilitiesOf(s.Registry.For(id))
+	writeJSON(w, http.StatusOK, map[string]any{"capabilities": caps})
 }
 
 // handleStream upgrades to WebSocket and pushes live telemetry. The guard

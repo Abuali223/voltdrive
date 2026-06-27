@@ -416,6 +416,41 @@ function subscribe() {
     console.warn("RTDB subscribe skipped:", e?.code);
   }
   hookSelectCar();
+  fetchCapabilities();
+}
+
+// Default capability set (full) so the simulated demo / offline mode shows
+// everything; a real device's reduced set replaces it once fetched.
+const ALL_CAPS = ["lock", "engine", "climate", "location", "battery", "charging", "range", "fuel", "odometer", "doors", "trunk", "lights", "horn", "seat", "tpms", "diagnostics"];
+
+// fetchCapabilities asks the backend which features the active vehicle's
+// connection supports, then hides controls/metrics that don't work.
+async function fetchCapabilities() {
+  if (!window.App) return;
+  if (!App.caps) App.caps = new Set(ALL_CAPS);
+  if (CFG.apiBase && auth?.currentUser) {
+    try {
+      const vid = VMAP[App.activeCar?.id] || "voyah-001";
+      const tk = await auth.currentUser.getIdToken();
+      const r = await fetch(`${CFG.apiBase}/v1/vehicles/${vid}/capabilities`, { headers: { Authorization: `Bearer ${tk}` } });
+      if (r.ok) {
+        const d = await r.json();
+        if (Array.isArray(d.capabilities)) App.caps = new Set(d.capabilities);
+      }
+    } catch (_) {}
+  }
+  applyCapabilities();
+}
+
+// applyCapabilities hides every [data-cap] element whose required capabilities
+// aren't all supported by the active vehicle.
+function applyCapabilities() {
+  const caps = window.App && App.caps;
+  if (!caps) return;
+  document.querySelectorAll("[data-cap]").forEach((el) => {
+    const need = (el.getAttribute("data-cap") || "").split(/[\s,]+/).filter(Boolean);
+    el.classList.toggle("cap-hidden", !need.every((c) => caps.has(c)));
+  });
 }
 
 // startPolling fetches the active vehicle's state from the backend every few
@@ -639,6 +674,8 @@ function wireControls() {
   App.fleetToggleLock = fleetToggleLock;
   App.fleetFilter = fleetFilter;
   App.addVehicle = addVehicleLive; // garage: custom model + plate via CAN device
+  App.applyCapabilities = applyCapabilities;
+  App.fetchCapabilities = fetchCapabilities;
   App.openAdmin = () => { window.location.href = "admin.html"; };
 
   // Re-attach the user's CAN-added garage vehicles (persisted locally).

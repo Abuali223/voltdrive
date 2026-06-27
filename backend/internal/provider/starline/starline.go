@@ -76,6 +76,19 @@ func New(cfg Config) *Client {
 
 func (c *Client) Brand() string { return "starline" }
 
+// Capabilities declares what a StarLine device reliably supports. Control +
+// location are solid; EV battery/charging/range and TPMS are intentionally
+// excluded until confirmed on a live device (CAN support for those is alpha on
+// new Chinese EVs). Extend this list once /user/{uid}/data shows the fields.
+func (c *Client) Capabilities() []string {
+	return []string{
+		provider.CapLock, provider.CapEngine, provider.CapClimate,
+		provider.CapLocation, provider.CapOdometer, provider.CapDoors,
+		provider.CapTrunk, provider.CapLights, provider.CapHorn, provider.CapSeat,
+		provider.CapFuel,
+	}
+}
+
 func md5hex(s string) string  { sum := md5.Sum([]byte(s)); return hex.EncodeToString(sum[:]) }
 func sha1hex(s string) string { sum := sha1.Sum([]byte(s)); return hex.EncodeToString(sum[:]) }
 

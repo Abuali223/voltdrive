@@ -94,6 +94,8 @@ body{
 }
 .ni{cursor:pointer;color:#6a6c72;transition:color .15s;}
 .ni.on{color:var(--acc);}
+/* capability-gated controls: hidden when the active vehicle can't do them */
+.cap-hidden{display:none !important;}
 /* --- Controls hub (Boshqaruv) feature-tile grid --- */
 .cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;}
 .csec{font-family:'Sora';font-size:12px;font-weight:700;color:#7e8086;text-transform:uppercase;
@@ -341,9 +343,9 @@ body{
     <div class="car-img"><img id="home-car-img" src="project/cars/voyah.jpg" alt="Car" style="object-position:center 30%"></div>
     <div style="display:flex;gap:10px;margin-top:18px;">
       <div class="qbtn" id="lock-btn" onclick="App.toggleLock()"><i data-lucide="lock" style="width:20px;height:20px"></i></div>
-      <div class="qbtn" onclick="App.go('climate')"><i data-lucide="snowflake" style="width:20px;height:20px"></i></div>
+      <div class="qbtn" data-cap="climate" onclick="App.go('climate')"><i data-lucide="snowflake" style="width:20px;height:20px"></i></div>
       <div class="qbtn on" onclick="App.go('engine')"><i data-lucide="zap" style="width:20px;height:20px"></i></div>
-      <div class="qbtn" onclick="App.go('seat')"><i data-lucide="armchair" style="width:20px;height:20px"></i></div>
+      <div class="qbtn" data-cap="seat" onclick="App.go('seat')"><i data-lucide="armchair" style="width:20px;height:20px"></i></div>
     </div>
     <div style="margin-top:16px;">
       <div class="row" onclick="App.go('engine')">
@@ -766,7 +768,7 @@ body{
 
     <div class="csec"><i data-lucide="route" style="width:14px;height:14px"></i>Sayohat va energiya</div>
     <div class="cgrid">
-      <div class="ctile" onclick="App.go('charge')"><div class="ci grn"><i data-lucide="zap" style="width:23px;height:23px"></i></div><div class="cl">Zaryad</div></div>
+      <div class="ctile" data-cap="charging" onclick="App.go('charge')"><div class="ci grn"><i data-lucide="zap" style="width:23px;height:23px"></i></div><div class="cl">Zaryad</div></div>
       <div class="ctile" onclick="App.parking()"><div class="ci"><i data-lucide="square-parking" style="width:23px;height:23px"></i></div><div class="cl">Turargoh</div></div>
       <div class="ctile" onclick="App.openTrips()"><div class="ci"><i data-lucide="route" style="width:22px;height:22px"></i></div><div class="cl">Sayohatlar tarixi</div></div>
       <div class="ctile" onclick="App.openTripPlanner()"><div class="ci blu"><i data-lucide="map" style="width:22px;height:22px"></i></div><div class="cl">AI sayohat rejasi</div></div>
