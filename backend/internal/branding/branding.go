@@ -21,6 +21,8 @@ type Branding struct {
 	Accent2     string `json:"accent2"`
 	AccentSolid string `json:"accentSolid"`
 	Logo        string `json:"logo"`
+	PayCard     string `json:"payCard"`   // manual-payment card number (admin-editable)
+	PayHolder   string `json:"payHolder"` // card holder name
 }
 
 type Store struct {
@@ -78,6 +80,7 @@ func (s *Store) Get(ctx context.Context) (Branding, bool, error) {
 	return Branding{
 		Name: g("name"), Tagline: g("tagline"), Accent: g("accent"),
 		Accent2: g("accent2"), AccentSolid: g("accentSolid"), Logo: g("logo"),
+		PayCard: g("payCard"), PayHolder: g("payHolder"),
 	}, true, nil
 }
 
@@ -86,6 +89,7 @@ func (s *Store) Put(ctx context.Context, b Branding) error {
 	body := map[string]any{"fields": map[string]any{
 		"name": sv(b.Name), "tagline": sv(b.Tagline), "accent": sv(b.Accent),
 		"accent2": sv(b.Accent2), "accentSolid": sv(b.AccentSolid), "logo": sv(b.Logo),
+		"payCard": sv(b.PayCard), "payHolder": sv(b.PayHolder),
 	}}
 	j, _ := json.Marshal(body)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, s.doc(), bytes.NewReader(j))

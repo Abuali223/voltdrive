@@ -308,6 +308,14 @@ async function loadBranding() {
         <div><div class="muted" style="margin-bottom:6px;">Asosiy (to'q)</div><input type="color" id="b-acc2" value="${v('accent2','#FF4D00')}" style="width:56px;height:40px;padding:2px;"></div>
         <div><div class="muted" style="margin-bottom:6px;">Matn/ikona</div><input type="color" id="b-accs" value="${v('accentSolid','#FF8A3D')}" style="width:56px;height:40px;padding:2px;"></div>
       </div>
+      <div style="border-top:1px solid rgba(255,255,255,.08);margin:18px 0 14px;padding-top:14px;">
+        <h2 style="font-size:15px;">💳 To'lov kartasi (qo'lda to'lov)</h2>
+        <p class="muted" style="margin-bottom:12px;">Mijoz shu kartaga o'tkazadi. Premium ekranida shu raqam ko'rinadi.</p>
+        <label class="muted">Karta raqami</label>
+        <input id="b-card" placeholder="8600 1234 5678 9012" value="${v('payCard')}" style="margin:6px 0 14px;letter-spacing:1px;">
+        <label class="muted">Karta egasi</label>
+        <input id="b-holder" placeholder="VoltDrive LLC / Ism Familiya" value="${v('payHolder')}" style="margin:6px 0 2px;">
+      </div>
       <div class="row" style="margin-top:18px;gap:10px;">
         <button class="btn" id="b-save">Saqlash</button>
         <button class="btn ghost" id="b-reset">Standartga qaytarish</button>
@@ -318,9 +326,10 @@ async function loadBranding() {
   $("b-reset").onclick = () => saveBranding(true);
 }
 async function saveBranding(reset) {
-  const body = reset ? { name: "", tagline: "", logo: "", accent: "", accent2: "", accentSolid: "" } : {
+  const body = reset ? { name: "", tagline: "", logo: "", accent: "", accent2: "", accentSolid: "", payCard: "", payHolder: "" } : {
     name: $("b-name").value.trim(), tagline: $("b-tag").value.trim(), logo: $("b-logo").value.trim(),
     accent: $("b-acc").value, accent2: $("b-acc2").value, accentSolid: $("b-accs").value,
+    payCard: $("b-card").value.trim(), payHolder: $("b-holder").value.trim(),
   };
   const r = await api("/v1/admin/branding", { method: "PUT", body: JSON.stringify(body) });
   $("b-msg").textContent = r.ok ? "Saqlandi ✓ (ilovani yangilang)" : "Xato: " + r.status;

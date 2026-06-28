@@ -2465,10 +2465,11 @@ async function requestTier(tier) {
     const r = await apiAuthFetch("/v1/subscription/request", { method: "POST", body: JSON.stringify({ tier }) });
     if (!r.ok) throw new Error("HTTP " + r.status);
     currentSub = await r.json();
-    // Show payment instructions.
+    // Show payment instructions. Admin-set card (branding) overrides config.
     const pay = CFG.payment || {};
-    document.getElementById("pay-card").textContent = pay.card || "—";
-    document.getElementById("pay-holder").textContent = pay.holder || "";
+    const brand = CFG.branding || {};
+    document.getElementById("pay-card").textContent = brand.payCard || pay.card || "—";
+    document.getElementById("pay-holder").textContent = brand.payHolder || pay.holder || "";
     const price = (pay.prices && pay.prices[tier]) || "";
     const names = { "1m": uz ? "1 oy" : "1 month", "2m": uz ? "2 oy" : "2 months", "1y": uz ? "1 yil" : "1 year" };
     document.getElementById("pay-amount").textContent = (uz ? "To'lov: " : "Amount: ") + price + " so'm · " + names[tier];
@@ -2503,7 +2504,7 @@ async function payWith(provider) {
 
 function copyCard() {
   const uz = window.App?.lang === "uz";
-  const card = (CFG.payment && CFG.payment.card) || "";
+  const card = (CFG.branding && CFG.branding.payCard) || (CFG.payment && CFG.payment.card) || "";
   navigator.clipboard?.writeText(card.replace(/\s/g, "")).then(
     () => toast(uz ? "Karta raqami nusxalandi ✓" : "Card number copied ✓", "ok"),
     () => toast(card));
